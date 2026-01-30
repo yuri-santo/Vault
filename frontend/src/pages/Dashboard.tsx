@@ -299,6 +299,100 @@ function EntryActions({
   );
 }
 
+
+function IconActionButton({
+  title,
+  onClick,
+  disabled,
+  children,
+  danger,
+}: {
+  title: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'h-9 w-9 rounded-xl border border-zinc-200/70 bg-white/90 shadow-sm flex items-center justify-center transition',
+        'hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed',
+        danger ? 'text-rose-600 hover:bg-rose-50' : 'text-zinc-700'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EntryInlineActions({
+  entry,
+  revealed,
+  onRevealToggle,
+  onEdit,
+  onDelete,
+  compact,
+}: {
+  entry: VaultEntry;
+  revealed: boolean;
+  onRevealToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  compact?: boolean;
+}) {
+  const { push } = useToast();
+
+  async function copyPassword() {
+    if (!entry.password) return;
+    await navigator.clipboard.writeText(entry.password);
+    push('Senha copiada ✅', 'success');
+  }
+
+  return (
+    <div className={cn('flex items-center gap-2', compact && 'gap-1')}>
+      <IconActionButton
+        title="Copiar senha"
+        disabled={!entry.password}
+        onClick={copyPassword}
+      >
+        <Icon name="copy" className="h-4 w-4" />
+      </IconActionButton>
+
+      <IconActionButton
+        title={revealed ? 'Ocultar senha' : 'Revelar senha'}
+        disabled={!entry.password}
+        onClick={onRevealToggle}
+      >
+        <Icon name="eye" className="h-4 w-4" />
+      </IconActionButton>
+
+      <IconActionButton
+        title={entry.canEdit ? 'Editar' : 'Somente leitura'}
+        disabled={!entry.canEdit}
+        onClick={onEdit}
+      >
+        <Icon name="edit" className="h-4 w-4" />
+      </IconActionButton>
+
+      <IconActionButton
+        title={entry.canEdit ? 'Excluir' : 'Somente leitura'}
+        disabled={!entry.canEdit}
+        onClick={onDelete}
+        danger
+      >
+        <Icon name="trash" className="h-4 w-4" />
+      </IconActionButton>
+    </div>
+  );
+}
+
+
 export default function Dashboard({
   userEmail,
   onLogout,
@@ -715,9 +809,11 @@ export default function Dashboard({
                 </div>
 
                 <div className="mt-3 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm overflow-hidden">
-                  <div className="hidden sm:grid grid-cols-[1.6fr_1.1fr_1fr_132px] gap-3 px-5 py-3 border-b border-zinc-200/70 text-[11px] uppercase tracking-wide text-zinc-500">
+                  <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_184px] gap-3 px-5 py-3 border-b border-zinc-200/70 text-[11px] uppercase tracking-wide text-zinc-500">
                     <div>Serviço / Nome</div>
                     <div>Usuário</div>
+                    <div>E-mail</div>
+                    <div>IP / Host</div>
                     <div>Senha</div>
                     <div className="text-right pr-1">Ações</div>
                   </div>
@@ -726,15 +822,17 @@ export default function Dashboard({
                     {loading ? (
                       <div className="p-5 space-y-4">
                         {[0, 1, 2, 3].map((i) => (
-                          <div key={i} className="grid grid-cols-1 sm:grid-cols-[1.6fr_1.1fr_1fr_132px] gap-3 items-center">
+                          <div key={i} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_184px] gap-3 items-center">
                             <div>
                               <Skeleton className="h-4 w-40" />
                               <Skeleton className="h-3 w-24 mt-2" />
                             </div>
                             <Skeleton className="h-4 w-36" />
-                            <Skeleton className="h-9 w-40" />
-                            <div className="flex sm:justify-end">
-                              <Skeleton className="h-9 w-9 rounded-xl" />
+                            <Skeleton className="h-4 w-44" />
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-9 w-44" />
+                            <div className="flex lg:justify-end">
+                              <Skeleton className="h-9 w-40 rounded-xl" />
                             </div>
                           </div>
                         ))}
@@ -750,40 +848,86 @@ export default function Dashboard({
                         return (
                           <div
                             key={e.id}
-                            className="grid grid-cols-1 sm:grid-cols-[1.6fr_1.1fr_1fr_132px] gap-3 px-5 py-4 border-b border-zinc-200/50 last:border-b-0 items-start sm:items-center"
+                            className="px-5 py-4 border-b border-zinc-200/50 last:border-b-0"
                           >
-                            <div className="min-w-0">
-                              <div className="font-medium truncate">{e.name}</div>
-                              <div className="text-xs text-zinc-500 mt-1 truncate">
-                                {e.ip || e.email || e.ownerEmail || '—'}
+                            {/* Card layout (mobile / tablet) */}
+                            <div className="lg:hidden">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-medium truncate">{e.name}</div>
+                                  <div className="text-xs text-zinc-500 mt-1 break-all">
+                                    {e.email || e.ip || e.ownerEmail || '—'}
+                                  </div>
+                                </div>
+                                <EntryInlineActions
+                                  entry={e}
+                                  revealed={revealed}
+                                  onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                                  onEdit={() => openEdit(e)}
+                                  onDelete={() => removeEntry(e)}
+                                  compact
+                                />
+                              </div>
+
+                              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">Usuário</div>
+                                  <div className="text-sm text-zinc-800 break-all mt-1">{e.username || '—'}</div>
+                                </div>
+
+                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">E-mail</div>
+                                  <div className="text-sm text-zinc-800 break-all mt-1">{e.email || '—'}</div>
+                                </div>
+
+                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">IP / Host</div>
+                                  <div className="text-sm text-zinc-800 break-all mt-1">{e.ip || '—'}</div>
+                                </div>
+
+                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">Senha</div>
+                                  <div className="text-sm font-mono text-zinc-800 mt-1 break-all">
+                                    {pass ? (revealed ? pass : maskPassword(pass)) : '—'}
+                                  </div>
+                                </div>
                               </div>
                             </div>
 
-                            <div className="text-sm text-zinc-700 break-all">
-                              {e.username || '—'}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white px-3 py-2 min-w-[170px]">
-                                <span className="text-sm font-mono text-zinc-800">
-                                  {pass ? (revealed ? pass : maskPassword(pass)) : '—'}
-                                </span>
+                            {/* Table row layout (desktop) */}
+                            <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_184px] gap-3 items-center">
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">{e.name}</div>
+                                <div className="text-xs text-zinc-500 mt-1 truncate">
+                                  {e.ownerEmail || '—'}
+                                </div>
                               </div>
-                            </div>
 
-                            <div className="flex sm:justify-end">
-                              <EntryActions
-                                entry={e}
-                                revealed={revealed}
-                                onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                                onEdit={() => openEdit(e)}
-                                onDelete={() => removeEntry(e)}
-                              />
+                              <div className="text-sm text-zinc-800 break-all">{e.username || '—'}</div>
+                              <div className="text-sm text-zinc-800 break-all">{e.email || '—'}</div>
+                              <div className="text-sm text-zinc-800 break-all">{e.ip || '—'}</div>
+
+                              <div className="flex items-center">
+                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2 w-full">
+                                  <span className="text-sm font-mono text-zinc-800">
+                                    {pass ? (revealed ? pass : maskPassword(pass)) : '—'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex justify-end">
+                                <EntryInlineActions
+                                  entry={e}
+                                  revealed={revealed}
+                                  onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                                  onEdit={() => openEdit(e)}
+                                  onDelete={() => removeEntry(e)}
+                                />
+                              </div>
                             </div>
                           </div>
                         );
-                      })
-                    )}
+                      })}
                   </div>
                 </div>
               </div>
