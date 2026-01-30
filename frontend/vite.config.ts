@@ -17,10 +17,5 @@ export default defineConfig({
     },
   },
 
-  preview: {
-    allowedHosts: [
-      'vault-ep2w.onrender.com',
-      '.onrender.com',
-    ],
-  },
+  preview: { allowedHosts: true },
 })
