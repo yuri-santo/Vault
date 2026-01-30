@@ -20,7 +20,8 @@ export function authRouter(opts: {
 
   // Get a CSRF token (front-end should call this before any POST/PUT/DELETE)
   r.get('/csrf', opts.csrfProtection, (req, res) => {
-    res.json({ csrfToken: req.csrfToken() });
+    // csurf attaches req.csrfToken() at runtime; types are augmented in src/types
+    res.json({ csrfToken: req.csrfToken?.() ?? '' });
   });
 
   // Establish a server-side session cookie using a Firebase ID token.

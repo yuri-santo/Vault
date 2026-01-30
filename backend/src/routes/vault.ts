@@ -36,12 +36,12 @@ export function vaultRouter(opts: {
     return {
       id: doc.id,
       name: d.name,
-      ip: maybeDecrypt(d.ip, opts.masterKey),
-      username: maybeDecrypt(d.username, opts.masterKey),
-      password: maybeDecrypt(d.password, opts.masterKey),
-      email: maybeDecrypt(d.email, opts.masterKey),
-      connectionData: maybeDecrypt(d.connectionData, opts.masterKey),
-      notes: maybeDecrypt(d.notes, opts.masterKey),
+      ip: maybeDecrypt(d.ip),
+      username: maybeDecrypt(d.username),
+      password: maybeDecrypt(d.password),
+      email: maybeDecrypt(d.email),
+      connectionData: maybeDecrypt(d.connectionData),
+      notes: maybeDecrypt(d.notes),
       createdAt: d.createdAt,
       updatedAt: d.updatedAt
     };
@@ -62,12 +62,12 @@ export function vaultRouter(opts: {
     const now = new Date().toISOString();
     const payload = {
       name: parsed.data.name,
-      ip: maybeEncrypt(parsed.data.ip ?? null, opts.masterKey),
-      username: maybeEncrypt(parsed.data.username ?? null, opts.masterKey),
-      password: maybeEncrypt(parsed.data.password ?? null, opts.masterKey),
-      email: maybeEncrypt(parsed.data.email ?? null, opts.masterKey),
-      connectionData: maybeEncrypt(parsed.data.connectionData ?? null, opts.masterKey),
-      notes: maybeEncrypt(parsed.data.notes ?? null, opts.masterKey),
+      ip: maybeEncrypt(parsed.data.ip ?? null),
+      username: maybeEncrypt(parsed.data.username ?? null),
+      password: maybeEncrypt(parsed.data.password ?? null),
+      email: maybeEncrypt(parsed.data.email ?? null),
+      connectionData: maybeEncrypt(parsed.data.connectionData ?? null),
+      notes: maybeEncrypt(parsed.data.notes ?? null),
       createdAt: now,
       updatedAt: now,
       createdByUid: req.user?.uid,
@@ -103,12 +103,12 @@ export function vaultRouter(opts: {
       updatedByEmail: req.user?.email
     };
     if (parsed.data.name !== undefined) patch.name = parsed.data.name;
-    if (parsed.data.ip !== undefined) patch.ip = maybeEncrypt(parsed.data.ip ?? null, opts.masterKey);
-    if (parsed.data.username !== undefined) patch.username = maybeEncrypt(parsed.data.username ?? null, opts.masterKey);
-    if (parsed.data.password !== undefined) patch.password = maybeEncrypt(parsed.data.password ?? null, opts.masterKey);
-    if (parsed.data.email !== undefined) patch.email = maybeEncrypt(parsed.data.email ?? null, opts.masterKey);
-    if (parsed.data.connectionData !== undefined) patch.connectionData = maybeEncrypt(parsed.data.connectionData ?? null, opts.masterKey);
-    if (parsed.data.notes !== undefined) patch.notes = maybeEncrypt(parsed.data.notes ?? null, opts.masterKey);
+    if (parsed.data.ip !== undefined) patch.ip = maybeEncrypt(parsed.data.ip ?? null);
+    if (parsed.data.username !== undefined) patch.username = maybeEncrypt(parsed.data.username ?? null);
+    if (parsed.data.password !== undefined) patch.password = maybeEncrypt(parsed.data.password ?? null);
+    if (parsed.data.email !== undefined) patch.email = maybeEncrypt(parsed.data.email ?? null);
+    if (parsed.data.connectionData !== undefined) patch.connectionData = maybeEncrypt(parsed.data.connectionData ?? null);
+    if (parsed.data.notes !== undefined) patch.notes = maybeEncrypt(parsed.data.notes ?? null);
 
     await coll.doc(id).set(patch, { merge: true });
 
