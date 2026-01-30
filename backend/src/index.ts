@@ -90,6 +90,22 @@ const csrfProtection = csurf({
   },
 });
 
+// ✅ CSRF é necessário apenas quando a autenticação usa cookies (same-site).
+// Quando usamos Authorization: Bearer <ID_TOKEN> (recomendado para front/back em domínios diferentes),
+// não dependemos de cookies e não precisamos aplicar CSRF.
+function csrfIfCookie(mw: express.RequestHandler): express.RequestHandler {
+  return (req, res, next) => {
+    const hasBearer = typeof req.headers.authorization === 'string' && /^Bearer\s+/i.test(req.headers.authorization);
+    const hasSessionCookie = Boolean((req as any).cookies?.session);
+    // Se tem Bearer -> dispensa CSRF (mesmo que exista cookie)
+    if (hasBearer) return next();
+    // Se não tem cookie -> também dispensa (não há sessão via cookie)
+    if (!hasSessionCookie) return next();
+    // Cookie-mode -> aplica CSRF
+    return mw(req, res, next);
+  };
+}
+
 // Health / root
 app.get('/', (_req, res) => res.status(200).send('OK'));
 app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
@@ -105,7 +121,7 @@ app.get('/auth/csrf', csrfProtection, (req, res) => {
 // Routers (agora com as dependências corretas)
 app.use('/auth', authRouter({
   logger,
-  csrfProtection,
+  csrfProtection: csrfIfCookie(csrfProtection),
   fbAuth,
   fbDb,
   sessionTtlDays: Math.max(1, Math.ceil(env.SESSION_TTL_MS / 86_400_000)),
@@ -114,7 +130,7 @@ app.use('/auth', authRouter({
 
 app.use('/vault', vaultRouter({
   logger,
-  csrfProtection,
+  csrfProtection: csrfIfCookie(csrfProtection),
   fbAuth,
   fbDb,
   masterKey: env.MASTER_ENCRYPTION_KEY
@@ -122,24 +138,23 @@ app.use('/vault', vaultRouter({
 
 app.use('/sharing', sharingRouter({
   logger,
-  csrfProtection,
+  csrfProtection: csrfIfCookie(csrfProtection),
   fbAuth,
   fbDb,
 }));
 
 app.use('/notes', notesRouter({
   logger,
-  csrfProtection,
+  csrfProtection: csrfIfCookie(csrfProtection),
   fbAuth,
   fbDb,
 }));
 
 app.use('/drive', driveRouter({
   logger,
-  csrfProtection,
+  csrfProtection: csrfIfCookie(csrfProtection),
   fbAuth,
   fbDb,
-  driveServiceAccountJson: env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON,
   driveApiKey: env.GOOGLE_DRIVE_API_KEY,
 }));
 

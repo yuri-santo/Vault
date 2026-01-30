@@ -23,13 +23,7 @@ type DriveRouterOpts = {
   csrfProtection: RequestHandler;
   fbAuth: Auth;
   fbDb: admin.firestore.Firestore;
-
-  // Modo "link público" (read-only): listagem via API Key
   driveApiKey?: string;
-
-  // Mantido para compatibilidade (caso você volte a habilitar upload via Service Account/OAuth)
-  // No modo "link público" NÃO é usado.
-  driveServiceAccountJson?: string;
 };
 
 const IDENT_PREFIX = 'VAULT__';
@@ -118,9 +112,7 @@ export function driveRouter(opts: DriveRouterOpts) {
     const folderId = parseFolderId(raw);
     if (!folderId) return res.status(400).json({ error: 'Link/ID de pasta inválido' });
 
-    await settingsCol
-      .doc(uid)
-      .set({ driveFolderId: folderId, updatedAt: new Date().toISOString() }, { merge: true });
+    await settingsCol.doc(uid).set({ driveFolderId: folderId, updatedAt: new Date().toISOString() }, { merge: true });
 
     await auditFirestore(opts.fbDb, opts.logger, {
       action: 'drive_settings_update',
@@ -143,13 +135,13 @@ export function driveRouter(opts: DriveRouterOpts) {
 
       if (!opts.driveApiKey) {
         return res.status(501).json({
-          error:
-            'Drive não configurado no servidor. Configure GOOGLE_DRIVE_API_KEY para usar o modo "link público".',
+          error: 'Drive não configurado no servidor. Configure GOOGLE_DRIVE_API_KEY para usar o modo "link público".',
         });
       }
 
       const files = await listPublicFolderFiles({ apiKey: opts.driveApiKey, folderId, uid });
       return res.json({ files, needsSetup: false });
+
     } catch (e: any) {
       const status = e?.status ?? 500;
       return res.status(status).json({ error: e?.message ?? 'Erro Drive' });
@@ -159,8 +151,7 @@ export function driveRouter(opts: DriveRouterOpts) {
   // Upload (não disponível no modo link público)
   r.post('/upload', auth, opts.csrfProtection, async (_req: AuthedRequest, res) => {
     return res.status(501).json({
-      error:
-        'Upload no modo "link público" não é suportado. Use "Abrir pasta" e faça upload pelo Drive, ou habilite OAuth/Service Account.',
+      error: 'Upload no modo "link público" não é suportado. Use "Abrir pasta" e faça upload pelo Drive, ou habilite OAuth/Service Account.',
     });
   });
 

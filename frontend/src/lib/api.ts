@@ -5,6 +5,22 @@ const baseURL =
 
 let csrfToken: string | null = null;
 
+// Prefer Bearer token when frontend/backend are on different domains (Render).
+// Cookies cross-site are increasingly blocked/partitioned by browsers.
+const TOKEN_KEY = 'vault_id_token';
+let authToken: string | null =
+  typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_KEY) : null;
+
+export function setAuthToken(token: string) {
+  authToken = token;
+  if (typeof window !== 'undefined') window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  authToken = null;
+  if (typeof window !== 'undefined') window.localStorage.removeItem(TOKEN_KEY);
+}
+
 export const api = axios.create({
   baseURL,
   withCredentials: true,
@@ -14,8 +30,15 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  // Bearer auth (recommended)
+  if (authToken) {
+    config.headers = config.headers ?? {};
+    (config.headers as any)['Authorization'] = `Bearer ${authToken}`;
+  }
+
   // csurf expects this header for state-changing methods
-  if (csrfToken && config.method && ['post', 'put', 'patch', 'delete'].includes(config.method)) {
+  // If we are using Bearer, backend skips CSRF.
+  if (!authToken && csrfToken && config.method && ['post', 'put', 'patch', 'delete'].includes(config.method)) {
     config.headers = config.headers ?? {};
     (config.headers as any)['X-CSRF-Token'] = csrfToken;
   }
@@ -23,6 +46,7 @@ api.interceptors.request.use((config) => {
 });
 
 export async function initCsrf() {
+  if (authToken) return null;
   const { data } = await api.get('/auth/csrf');
   csrfToken = data.csrfToken;
   return csrfToken;
@@ -31,8 +55,9 @@ export async function initCsrf() {
 export type SessionUser = { uid: string; email?: string; role?: string };
 
 export async function createSession(idToken: string) {
+  // Legacy compatibility (cookie mode). Prefer setAuthToken + me().
   const { data } = await api.post('/auth/session', { idToken });
-  return data.user as SessionUser;
+  return (data.user ?? data?.user) as SessionUser;
 }
 
 export async function me() {
@@ -41,7 +66,12 @@ export async function me() {
 }
 
 export async function logout() {
-  await api.post('/auth/logout');
+  clearAuthToken();
+  try {
+    await api.post('/auth/logout');
+  } catch {
+    // ignore
+  }
 }
 
 export type VaultEntry = {
