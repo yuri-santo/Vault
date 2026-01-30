@@ -55,9 +55,22 @@ export async function initCsrf() {
 export type SessionUser = { uid: string; email?: string; role?: string };
 
 export async function createSession(idToken: string) {
-  // Legacy compatibility (cookie mode). Prefer setAuthToken + me().
-  const { data } = await api.post('/auth/session', { idToken });
-  return (data.user ?? data?.user) as SessionUser;
+  // IMPORTANT:
+  // In a two-services setup (Render), frontend and backend are on different domains.
+  // Modern browsers increasingly block/partition third-party cookies, so we prefer
+  // Bearer token auth for all API calls.
+  setAuthToken(idToken);
+
+  // Try to create the legacy cookie session as a best-effort (not required).
+  // If cookies are blocked, this may fail silently but Bearer still works.
+  try {
+    await api.post('/auth/session', { idToken });
+  } catch {
+    // ignore
+  }
+
+  // Fetch the user profile via Bearer.
+  return await me();
 }
 
 export async function me() {

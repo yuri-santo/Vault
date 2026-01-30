@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Input } from '../components/ui';
 import { createSession } from '../lib/api';
 import { useToast } from '../components/toast';
@@ -6,8 +6,10 @@ import { fbAuth } from '../lib/firebase';
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  getRedirectResult,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
 } from 'firebase/auth';
 
 export default function Login({ onLogged }: { onLogged: (user: { uid: string; email?: string; role?: string }) => void }) {
@@ -19,6 +21,26 @@ export default function Login({ onLogged }: { onLogged: (user: { uid: string; em
   const [loading, setLoading] = useState(false);
 
   const host = useMemo(() => (typeof window !== 'undefined' ? window.location.hostname : ''), []);
+
+  // If popup is blocked (common on mobile/Safari), Firebase can complete auth via redirect.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await getRedirectResult(fbAuth);
+        if (res?.user && mounted) {
+          const idToken = await res.user.getIdToken();
+          await signInWithIdToken(idToken);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function signInWithIdToken(idToken: string) {
     const u = await createSession(idToken);
@@ -62,9 +84,19 @@ export default function Login({ onLogged }: { onLogged: (user: { uid: string; em
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      const cred = await signInWithPopup(fbAuth, provider);
-      const idToken = await cred.user.getIdToken();
-      await signInWithIdToken(idToken);
+      try {
+        const cred = await signInWithPopup(fbAuth, provider);
+        const idToken = await cred.user.getIdToken();
+        await signInWithIdToken(idToken);
+      } catch (e: any) {
+        const code2 = e?.code || '';
+        // Popup blocked/closed: fallback to redirect flow.
+        if (code2 === 'auth/popup-blocked' || code2 === 'auth/popup-closed-by-user') {
+          await signInWithRedirect(fbAuth, provider);
+          return;
+        }
+        throw e;
+      }
     } catch (err: any) {
       const code = err?.code || '';
       if (code === 'auth/unauthorized-domain') {

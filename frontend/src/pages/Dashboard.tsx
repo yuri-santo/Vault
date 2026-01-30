@@ -97,6 +97,13 @@ export default function Dashboard({ userEmail, onLogout }: { userEmail: string; 
     );
   }, [entries, q]);
 
+  const stats = useMemo(() => {
+    const total = entries.length;
+    const shared = entries.filter((e) => e.isShared).length;
+    const editable = entries.filter((e) => e.canEdit).length;
+    return { total, shared, editable };
+  }, [entries]);
+
   async function loadSharing() {
     try {
       const inv = await listInvites();
@@ -358,10 +365,26 @@ export default function Dashboard({ userEmail, onLogout }: { userEmail: string; 
           <div className="text-xs text-zinc-500">{filtered.length} entradas</div>
         </div>
 
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-2xl bg-white border border-zinc-100 shadow-soft p-3">
+            <div className="text-xs text-zinc-500">Total</div>
+            <div className="mt-1 text-lg font-semibold text-zinc-900">{stats.total}</div>
+          </div>
+          <div className="rounded-2xl bg-white border border-zinc-100 shadow-soft p-3">
+            <div className="text-xs text-zinc-500">Editáveis</div>
+            <div className="mt-1 text-lg font-semibold text-zinc-900">{stats.editable}</div>
+          </div>
+          <div className="rounded-2xl bg-white border border-zinc-100 shadow-soft p-3">
+            <div className="text-xs text-zinc-500">Compartilhadas</div>
+            <div className="mt-1 text-lg font-semibold text-zinc-900">{stats.shared}</div>
+          </div>
+        </div>
+
         <div className="mt-4 grid lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <div className="rounded-2xl bg-white border border-zinc-100 shadow-soft overflow-hidden">
-              <div className="overflow-auto">
+              {/* Desktop/tablet: table view */}
+              <div className="hidden sm:block overflow-auto">
                 <table className="min-w-[1060px] w-full text-sm">
               <thead className="bg-zinc-50 border-b border-zinc-100 text-left text-xs text-zinc-500">
                 <tr>
@@ -444,6 +467,96 @@ export default function Dashboard({ userEmail, onLogout }: { userEmail: string; 
                 )}
               </tbody>
             </table>
+              </div>
+
+              {/* Mobile: card view */}
+              <div className="sm:hidden p-3 space-y-3">
+                {loading ? (
+                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 text-sm text-zinc-500">Carregando…</div>
+                ) : filtered.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 text-sm text-zinc-500">Nenhuma entrada encontrada.</div>
+                ) : (
+                  filtered.map((e) => {
+                    const isRevealed = !!reveal[e.id];
+                    return (
+                      <div key={e.id} className="rounded-xl border border-zinc-100 bg-white shadow-soft p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-zinc-900">{e.name}</div>
+                            <div className="mt-1 text-xs text-zinc-500">
+                              {e.ownerEmail ?? userEmail}
+                              {e.isShared && (
+                                <span className="ml-2 align-middle text-[10px] px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600">compartilhado</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-xs text-zinc-500">{fmtDate(e.updatedAt)}</div>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs text-zinc-500">Usuário</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-zinc-800">{e.username ?? '—'}</div>
+                              {e.username && (
+                                <button
+                                  className="text-xs text-zinc-500 hover:text-zinc-900"
+                                  onClick={async () => { await copyToClipboard(e.username!); push('Usuário copiado'); }}
+                                >Copiar</button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs text-zinc-500">Senha</div>
+                            <div className="flex items-center gap-2">
+                              <div className={cn('font-mono text-zinc-800', !isRevealed && 'select-none')}>
+                                {e.password ? (isRevealed ? e.password : mask(e.password)) : '—'}
+                              </div>
+                              {e.password && (
+                                <>
+                                  <button
+                                    className="text-xs text-zinc-500 hover:text-zinc-900"
+                                    onClick={() => setReveal((p) => ({ ...p, [e.id]: !p[e.id] }))}
+                                  >{isRevealed ? 'Ocultar' : 'Revelar'}</button>
+                                  <button
+                                    className="text-xs text-zinc-500 hover:text-zinc-900"
+                                    onClick={async () => { await copyToClipboard(e.password!); push('Senha copiada'); }}
+                                  >Copiar</button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {e.email && (
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-xs text-zinc-500">E-mail</div>
+                              <div className="text-zinc-800">{e.email}</div>
+                            </div>
+                          )}
+                          {e.ip && (
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-xs text-zinc-500">IP</div>
+                              <div className="text-zinc-800">{e.ip}</div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {e.canEdit ? (
+                            <>
+                              <Button variant="secondary" className="flex-1" onClick={() => openShare(e)}>Compartilhar</Button>
+                              <Button variant="secondary" className="flex-1" onClick={() => openEdit(e)}>Editar</Button>
+                              <Button variant="danger" className="w-full" onClick={() => remove(e.id)}>Excluir</Button>
+                            </>
+                          ) : (
+                            <div className="text-xs text-zinc-400">Somente leitura</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
