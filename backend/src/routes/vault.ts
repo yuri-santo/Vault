@@ -1,144 +1,171 @@
 import { Router } from 'express';
-import csurf from 'csurf';
-import { z } from 'zod';
+import type { RequestHandler } from 'express';
 import type winston from 'winston';
+import type { Auth } from 'firebase-admin/auth';
 import type admin from 'firebase-admin';
-import { maybeDecrypt, maybeEncrypt } from '../utils/crypto';
-import { requireSession, type AuthedRequest } from '../middleware/requireSession';
-import { auditFirestore } from '../utils/auditFirestore';
+import { maybeEncrypt, maybeDecrypt } from '../utils/crypto';
+import { auditFirestore } from '../utils/audit';
 
-const entrySchema = z.object({
-  name: z.string().min(1).max(120),
-  ip: z.string().max(200).optional().nullable(),
-  username: z.string().max(200).optional().nullable(),
-  password: z.string().max(2000).optional().nullable(),
-  email: z.string().max(320).optional().nullable(),
-  connectionData: z.string().max(5000).optional().nullable(),
-  notes: z.string().max(10000).optional().nullable()
-});
-
-const entryPatchSchema = entrySchema.partial();
-
-export function vaultRouter(opts: {
+type VaultRouterOpts = {
   logger: winston.Logger;
-  csrfProtection: ReturnType<typeof csurf>;
-  fbAuth: admin.auth.Auth;
+  csrfProtection: RequestHandler;
+  fbAuth: Auth;
   fbDb: admin.firestore.Firestore;
   masterKey: string;
-}) {
+};
+
+type VaultEntry = {
+  name: string;
+  ip?: string | null;
+  username?: string | null;
+  password?: string | null;
+  email?: string | null;
+  connectionData?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function getIp(req: any) {
+  return (req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim())
+    || req.socket?.remoteAddress
+    || req.ip;
+}
+
+// Middleware simples: exige cookie de sessão do Firebase
+function requireSession(opts: VaultRouterOpts) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const session = req.cookies?.session;
+      if (!session) return res.status(401).json({ error: 'Not authenticated' });
+
+      const decoded = await opts.fbAuth.verifySessionCookie(session, true);
+      req.user = { uid: decoded.uid, email: decoded.email };
+      next();
+    } catch {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+  };
+}
+
+export function vaultRouter(opts: VaultRouterOpts) {
   const r = Router();
+  const auth = requireSession(opts);
 
-  const authMw = requireSession(opts.fbAuth);
-  const coll = opts.fbDb.collection('vaultEntries');
+  const col = opts.fbDb.collection('vaultEntries');
 
-  function toApi(doc: admin.firestore.DocumentSnapshot) {
-    const d = doc.data() as any;
-    return {
-      id: doc.id,
-      name: d.name,
-      ip: maybeDecrypt(d.ip),
-      username: maybeDecrypt(d.username),
-      password: maybeDecrypt(d.password),
-      email: maybeDecrypt(d.email),
-      connectionData: maybeDecrypt(d.connectionData),
-      notes: maybeDecrypt(d.notes),
-      createdAt: d.createdAt,
-      updatedAt: d.updatedAt
-    };
-  }
+  // LIST
+  r.get('/', auth, async (req: any, res) => {
+    const snap = await col.orderBy('updatedAt', 'desc').get();
 
-  // List all entries (visible to any logged user)
-  r.get('/', authMw, async (_req, res) => {
-    const snap = await coll.orderBy('updatedAt', 'desc').limit(1000).get();
-    const entries = snap.docs.map(toApi);
-    return res.json({ entries });
+    const entries = snap.docs.map(d => {
+      const data = d.data() as any;
+      return {
+        id: d.id,
+        name: data.name,
+        ip: maybeDecrypt(data.ip),
+        username: maybeDecrypt(data.username),
+        password: maybeDecrypt(data.password),
+        email: maybeDecrypt(data.email),
+        connectionData: maybeDecrypt(data.connectionData),
+        notes: maybeDecrypt(data.notes),
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      };
+    });
+
+    await auditFirestore(opts.fbDb, opts.logger, {
+      action: 'vault_list',
+      uid: req.user?.uid,
+      email: req.user?.email,
+      ip: getIp(req),
+      userAgent: req.headers['user-agent'],
+      details: { count: entries.length }
+    });
+
+    res.json({ entries });
   });
 
-  // Create
-  r.post('/', authMw, opts.csrfProtection, async (req: AuthedRequest, res) => {
-    const parsed = entrySchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: 'Invalid payload' });
-
+  // CREATE
+  r.post('/', auth, opts.csrfProtection, async (req: any, res) => {
     const now = new Date().toISOString();
-    const payload = {
-      name: parsed.data.name,
-      ip: maybeEncrypt(parsed.data.ip ?? null),
-      username: maybeEncrypt(parsed.data.username ?? null),
-      password: maybeEncrypt(parsed.data.password ?? null),
-      email: maybeEncrypt(parsed.data.email ?? null),
-      connectionData: maybeEncrypt(parsed.data.connectionData ?? null),
-      notes: maybeEncrypt(parsed.data.notes ?? null),
+    const body = req.body ?? {};
+
+    if (!body.name || typeof body.name !== 'string') {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    const payload: VaultEntry = {
+      name: body.name,
+      ip: maybeEncrypt(body.ip),
+      username: maybeEncrypt(body.username),
+      password: maybeEncrypt(body.password),
+      email: maybeEncrypt(body.email),
+      connectionData: maybeEncrypt(body.connectionData),
+      notes: maybeEncrypt(body.notes),
       createdAt: now,
       updatedAt: now,
-      createdByUid: req.user?.uid,
-      createdByEmail: req.user?.email,
-      updatedByUid: req.user?.uid,
-      updatedByEmail: req.user?.email
     };
 
-    const ref = await coll.add(payload);
+    const doc = await col.add(payload);
 
     await auditFirestore(opts.fbDb, opts.logger, {
-      action: 'vault.create',
+      action: 'vault_create',
       uid: req.user?.uid,
       email: req.user?.email,
-      ip: req.ip,
-      userAgent: req.get('user-agent') ?? undefined,
-      details: { entryId: ref.id, name: parsed.data.name }
+      ip: getIp(req),
+      userAgent: req.headers['user-agent'],
+      details: { id: doc.id, name: body.name }
     });
 
-    return res.status(201).json({ id: ref.id });
+    res.json({ id: doc.id });
   });
 
-  // Update
-  r.put('/:id', authMw, opts.csrfProtection, async (req: AuthedRequest, res) => {
+  // UPDATE
+  r.put('/:id', auth, opts.csrfProtection, async (req: any, res) => {
     const id = req.params.id;
-    const parsed = entryPatchSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: 'Invalid payload' });
-
     const now = new Date().toISOString();
-    const patch: any = {
-      updatedAt: now,
-      updatedByUid: req.user?.uid,
-      updatedByEmail: req.user?.email
-    };
-    if (parsed.data.name !== undefined) patch.name = parsed.data.name;
-    if (parsed.data.ip !== undefined) patch.ip = maybeEncrypt(parsed.data.ip ?? null);
-    if (parsed.data.username !== undefined) patch.username = maybeEncrypt(parsed.data.username ?? null);
-    if (parsed.data.password !== undefined) patch.password = maybeEncrypt(parsed.data.password ?? null);
-    if (parsed.data.email !== undefined) patch.email = maybeEncrypt(parsed.data.email ?? null);
-    if (parsed.data.connectionData !== undefined) patch.connectionData = maybeEncrypt(parsed.data.connectionData ?? null);
-    if (parsed.data.notes !== undefined) patch.notes = maybeEncrypt(parsed.data.notes ?? null);
+    const body = req.body ?? {};
 
-    await coll.doc(id).set(patch, { merge: true });
+    const patch: any = { updatedAt: now };
+
+    if (body.name !== undefined) patch.name = body.name;
+    if (body.ip !== undefined) patch.ip = maybeEncrypt(body.ip);
+    if (body.username !== undefined) patch.username = maybeEncrypt(body.username);
+    if (body.password !== undefined) patch.password = maybeEncrypt(body.password);
+    if (body.email !== undefined) patch.email = maybeEncrypt(body.email);
+    if (body.connectionData !== undefined) patch.connectionData = maybeEncrypt(body.connectionData);
+    if (body.notes !== undefined) patch.notes = maybeEncrypt(body.notes);
+
+    await col.doc(id).set(patch, { merge: true });
 
     await auditFirestore(opts.fbDb, opts.logger, {
-      action: 'vault.update',
+      action: 'vault_update',
       uid: req.user?.uid,
       email: req.user?.email,
-      ip: req.ip,
-      userAgent: req.get('user-agent') ?? undefined,
-      details: { entryId: id }
+      ip: getIp(req),
+      userAgent: req.headers['user-agent'],
+      details: { id }
     });
 
-    return res.json({ ok: true });
+    res.json({ ok: true });
   });
 
-  // Delete
-  r.delete('/:id', authMw, opts.csrfProtection, async (req: AuthedRequest, res) => {
+  // DELETE
+  r.delete('/:id', auth, opts.csrfProtection, async (req: any, res) => {
     const id = req.params.id;
-    await coll.doc(id).delete();
+    await col.doc(id).delete();
 
     await auditFirestore(opts.fbDb, opts.logger, {
-      action: 'vault.delete',
+      action: 'vault_delete',
       uid: req.user?.uid,
       email: req.user?.email,
-      ip: req.ip,
-      userAgent: req.get('user-agent') ?? undefined,
-      details: { entryId: id }
+      ip: getIp(req),
+      userAgent: req.headers['user-agent'],
+      details: { id }
     });
 
-    return res.json({ ok: true });
+    res.json({ ok: true });
   });
 
   return r;

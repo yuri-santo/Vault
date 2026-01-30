@@ -1,95 +1,85 @@
 import { Router } from 'express';
-import csurf from 'csurf';
-import { z } from 'zod';
-import type winston from 'winston';import type admin from 'firebase-admin';import { auditFirestore } from '../utils/auditFirestore';
-import { requireSession, type AuthedRequest } from '../middleware/requireSession';
+import type { RequestHandler } from 'express';
+import type winston from 'winston';
+import type { Auth } from 'firebase-admin/auth';
+import type admin from 'firebase-admin';
+import { auditFirestore } from '../utils/audit';
 
-const sessionSchema = z.object({
-  idToken: z.string().min(50)
-});
-
-export function authRouter(opts: {
+type AuthRouterOpts = {
   logger: winston.Logger;
-  csrfProtection: ReturnType<typeof csurf>;
-  fbAuth: admin.auth.Auth;
+  csrfProtection: RequestHandler;
+  fbAuth: Auth;
   fbDb: admin.firestore.Firestore;
   sessionTtlDays: number;
   cookieSecure: boolean;
-}) {
+};
+
+function getIp(req: any) {
+  return (req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim())
+    || req.socket?.remoteAddress
+    || req.ip;
+}
+
+export function authRouter(opts: AuthRouterOpts) {
   const r = Router();
 
-  // Get a CSRF token (front-end should call this before any POST/PUT/DELETE)
-  r.get('/csrf', opts.csrfProtection, (req, res) => {
-    // csurf attaches req.csrfToken() at runtime; types are augmented in src/types
-    res.json({ csrfToken: req.csrfToken?.() ?? '' });
-  });
-
-  // Establish a server-side session cookie using a Firebase ID token.
-  // Front-end flow:
-  // 1) Firebase signInWithEmailAndPassword
-  // 2) getIdToken()
-  // 3) POST /auth/session {idToken}
+  // Cria sessão via Firebase ID token
   r.post('/session', opts.csrfProtection, async (req, res) => {
-    const parsed = sessionSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: 'Invalid payload' });
-
-    const ip = req.ip;
-    const userAgent = req.get('user-agent') ?? undefined;
-
     try {
-      const decoded = await opts.fbAuth.verifyIdToken(parsed.data.idToken);
-      const expiresIn = opts.sessionTtlDays * 24 * 60 * 60 * 1000;
-      const sessionCookie = await opts.fbAuth.createSessionCookie(parsed.data.idToken, { expiresIn });
+      const { idToken } = req.body as { idToken?: string };
+      if (!idToken) return res.status(400).json({ error: 'Missing idToken' });
 
+      const decoded = await opts.fbAuth.verifyIdToken(idToken);
+      const expiresIn = opts.sessionTtlDays * 24 * 60 * 60 * 1000;
+
+      // Firebase session cookie
+      const sessionCookie = await opts.fbAuth.createSessionCookie(idToken, { expiresIn });
+
+      // ✅ cookie cross-site
       res.cookie('session', sessionCookie, {
         httpOnly: true,
         secure: opts.cookieSecure,
-        sameSite: 'strict',
+        sameSite: opts.cookieSecure ? 'none' : 'lax',
         path: '/',
         maxAge: expiresIn
       });
 
-      const email = decoded.email ?? undefined;
-      const role = (decoded as any).role ?? undefined;
-
-      await auditFirestore(opts.fbDb, opts.logger, { action: 'auth.login_success', uid: decoded.uid, email, ip, userAgent });
-
-      return res.json({
-        user: {
-          uid: decoded.uid,
-          email,
-          role
-        }
+      await auditFirestore(opts.fbDb, opts.logger, {
+        action: 'login_success',
+        uid: decoded.uid,
+        email: decoded.email,
+        ip: getIp(req),
+        userAgent: req.headers['user-agent'],
       });
+
+      return res.json({ ok: true, user: { uid: decoded.uid, email: decoded.email } });
     } catch (e) {
-      await auditFirestore(opts.fbDb, opts.logger, { action: 'auth.login_failed', ip, userAgent, details: { reason: 'invalid_id_token' } });
-      return res.status(401).json({ message: 'Invalid credentials' });
+      opts.logger.warn({ type: 'auth_session_error', error: (e as Error).message });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
   });
 
-  // Current user (session-based)
-  r.get('/me', requireSession(opts.fbAuth), async (req: AuthedRequest, res) => {
-    return res.json({ user: req.user });
+  // Retorna usuário atual
+  r.get('/me', async (req, res) => {
+    try {
+      const session = req.cookies?.session;
+      if (!session) return res.status(401).json({ error: 'Not authenticated' });
+
+      const decoded = await opts.fbAuth.verifySessionCookie(session, true);
+      return res.json({ user: { uid: decoded.uid, email: decoded.email } });
+    } catch {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
   });
 
   // Logout
-  r.post('/logout', opts.csrfProtection, async (req, res) => {
-    const ip = req.ip;
-    const userAgent = req.get('user-agent') ?? undefined;
-    const sessionCookie = req.cookies?.session as string | undefined;
-
-    // Best-effort revoke
-    if (sessionCookie) {
-      try {
-        const decoded = await opts.fbAuth.verifySessionCookie(sessionCookie, true);
-        await opts.fbAuth.revokeRefreshTokens(decoded.uid);
-        await auditFirestore(opts.fbDb, opts.logger, { action: 'auth.logout', uid: decoded.uid, email: (decoded as any).email, ip, userAgent });
-      } catch {
-        // ignore
-      }
-    }
-
-    res.clearCookie('session', { path: '/' });
+  r.post('/logout', opts.csrfProtection, async (_req, res) => {
+    res.clearCookie('session', {
+      httpOnly: true,
+      secure: opts.cookieSecure,
+      sameSite: opts.cookieSecure ? 'none' : 'lax',
+      path: '/',
+    });
     return res.json({ ok: true });
   });
 
