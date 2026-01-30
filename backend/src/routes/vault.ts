@@ -5,6 +5,7 @@ import type { Auth } from 'firebase-admin/auth';
 import type admin from 'firebase-admin';
 import { maybeEncrypt, maybeDecrypt } from '../utils/crypto';
 import { auditFirestore } from '../utils/audit';
+import { requireSession, type AuthedRequest } from '../middleware/requireSession';
 
 type VaultRouterOpts = {
   logger: winston.Logger;
@@ -15,6 +16,9 @@ type VaultRouterOpts = {
 };
 
 type VaultEntry = {
+  ownerUid?: string;
+  ownerEmail?: string;
+  sharedWith?: string[];
   name: string;
   ip?: string | null;
   username?: string | null;
@@ -32,36 +36,39 @@ function getIp(req: any) {
     || req.ip;
 }
 
-// Middleware simples: exige cookie de sessão do Firebase
-function requireSession(opts: VaultRouterOpts) {
-  return async (req: any, res: any, next: any) => {
-    try {
-      const session = req.cookies?.session;
-      if (!session) return res.status(401).json({ error: 'Not authenticated' });
-
-      const decoded = await opts.fbAuth.verifySessionCookie(session, true);
-      req.user = { uid: decoded.uid, email: decoded.email };
-      next();
-    } catch {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-  };
-}
-
 export function vaultRouter(opts: VaultRouterOpts) {
   const r = Router();
-  const auth = requireSession(opts);
+  const auth = requireSession(opts.fbAuth as any);
 
   const col = opts.fbDb.collection('vaultEntries');
 
   // LIST
-  r.get('/', auth, async (req: any, res) => {
-    const snap = await col.orderBy('updatedAt', 'desc').get();
+  r.get('/', auth, async (req: AuthedRequest, res) => {
+    const uid = req.user!.uid;
+    const email = req.user!.email;
 
-    const entries = snap.docs.map(d => {
+    // Busca entradas próprias + compartilhadas (sem exigir index de orderBy)
+    const [ownedSnap, sharedSnap] = await Promise.all([
+      col.where('ownerUid', '==', uid).get(),
+      col.where('sharedWith', 'array-contains', uid).get()
+    ]);
+
+    const byId = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    ownedSnap.docs.forEach(d => byId.set(d.id, d));
+    sharedSnap.docs.forEach(d => byId.set(d.id, d));
+
+    const entries = Array.from(byId.values()).map(d => {
       const data = d.data() as any;
+      const ownerUid = data.ownerUid ?? uid;
+      const ownerEmail = data.ownerEmail ?? email ?? null;
+      const canEdit = ownerUid === uid;
       return {
         id: d.id,
+        ownerUid,
+        ownerEmail,
+        canEdit,
+        isShared: ownerUid !== uid,
+        sharedWith: Array.isArray(data.sharedWith) ? data.sharedWith : [],
         name: data.name,
         ip: maybeDecrypt(data.ip),
         username: maybeDecrypt(data.username),
@@ -73,6 +80,8 @@ export function vaultRouter(opts: VaultRouterOpts) {
         updatedAt: data.updatedAt,
       };
     });
+
+    entries.sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 
     await auditFirestore(opts.fbDb, opts.logger, {
       action: 'vault_list',
@@ -87,7 +96,7 @@ export function vaultRouter(opts: VaultRouterOpts) {
   });
 
   // CREATE
-  r.post('/', auth, opts.csrfProtection, async (req: any, res) => {
+  r.post('/', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
     const now = new Date().toISOString();
     const body = req.body ?? {};
 
@@ -96,6 +105,9 @@ export function vaultRouter(opts: VaultRouterOpts) {
     }
 
     const payload: VaultEntry = {
+      ownerUid: req.user!.uid,
+      ownerEmail: req.user!.email ?? null,
+      sharedWith: [],
       name: body.name,
       ip: maybeEncrypt(body.ip),
       username: maybeEncrypt(body.username),
@@ -122,10 +134,16 @@ export function vaultRouter(opts: VaultRouterOpts) {
   });
 
   // UPDATE
-  r.put('/:id', auth, opts.csrfProtection, async (req: any, res) => {
+  r.put('/:id', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
     const id = req.params.id;
     const now = new Date().toISOString();
     const body = req.body ?? {};
+
+    const current = await col.doc(id).get();
+    if (!current.exists) return res.status(404).json({ error: 'Not found' });
+    const data = current.data() as any;
+    const ownerUid = data.ownerUid ?? req.user!.uid;
+    if (ownerUid !== req.user!.uid) return res.status(403).json({ error: 'Forbidden' });
 
     const patch: any = { updatedAt: now };
 
@@ -151,9 +169,44 @@ export function vaultRouter(opts: VaultRouterOpts) {
     res.json({ ok: true });
   });
 
-  // DELETE
-  r.delete('/:id', auth, opts.csrfProtection, async (req: any, res) => {
+  // Compartilhar / atualizar lista de uids com acesso
+  r.put('/:id/share', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
     const id = req.params.id;
+    const uids = (req.body?.uids ?? []) as unknown;
+    if (!Array.isArray(uids) || !uids.every((x) => typeof x === 'string')) {
+      return res.status(400).json({ error: 'uids must be string[]' });
+    }
+
+    const current = await col.doc(id).get();
+    if (!current.exists) return res.status(404).json({ error: 'Not found' });
+    const data = current.data() as any;
+    const ownerUid = data.ownerUid ?? req.user!.uid;
+    if (ownerUid !== req.user!.uid) return res.status(403).json({ error: 'Forbidden' });
+
+    await col.doc(id).set({ sharedWith: uids, updatedAt: new Date().toISOString() }, { merge: true });
+
+    await auditFirestore(opts.fbDb, opts.logger, {
+      action: 'vault_share_update',
+      uid: req.user?.uid,
+      email: req.user?.email,
+      ip: getIp(req as any),
+      userAgent: (req as any).headers['user-agent'],
+      details: { id, uids }
+    });
+
+    return res.json({ ok: true });
+  });
+
+  // DELETE
+  r.delete('/:id', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
+    const id = req.params.id;
+
+    const current = await col.doc(id).get();
+    if (!current.exists) return res.status(404).json({ error: 'Not found' });
+    const data = current.data() as any;
+    const ownerUid = data.ownerUid ?? req.user!.uid;
+    if (ownerUid !== req.user!.uid) return res.status(403).json({ error: 'Forbidden' });
+
     await col.doc(id).delete();
 
     await auditFirestore(opts.fbDb, opts.logger, {
