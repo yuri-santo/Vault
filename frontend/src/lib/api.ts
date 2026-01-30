@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const baseURL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3001';
+const baseURL =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
 
 let csrfToken: string | null = null;
 
