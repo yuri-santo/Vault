@@ -6,9 +6,10 @@ export function cn(...classes: Array<string | false | null | undefined>) {
 
 export function Button(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' }) {
   const { className, variant = 'primary', ...rest } = props;
-  const base = 'inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-400/40 disabled:opacity-60 disabled:cursor-not-allowed';
+  const base =
+    'inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:opacity-60 disabled:cursor-not-allowed';
   const variants = {
-    primary: 'bg-zinc-900 text-white hover:bg-zinc-800',
+    primary: 'bg-violet-600 text-white hover:bg-violet-500',
     secondary: 'bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50',
     danger: 'bg-rose-600 text-white hover:bg-rose-500'
   } as const;
@@ -20,7 +21,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       className={cn(
-        'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400/30',
+        'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500/20',
         className
       )}
       {...rest}
@@ -33,7 +34,7 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   return (
     <textarea
       className={cn(
-        'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400/30',
+        'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500/20',
         className
       )}
       {...rest}
@@ -53,4 +54,8 @@ export function Card({ title, subtitle, children }: { title?: string; subtitle?:
       <div className="p-6">{children}</div>
     </div>
   );
+}
+
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn('animate-pulse rounded-md bg-zinc-200/70', className)} />;
 }
