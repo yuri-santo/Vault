@@ -5,7 +5,6 @@ import cookieParser from 'cookie-parser';
 import csurf from 'csurf';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
-import 'dotenv/config';
 import { loadEnv } from './utils/env';
 import { createLogger } from './utils/logger';
 import { authRouter } from './routes/auth';
@@ -16,13 +15,17 @@ const env = loadEnv();
 const logger = createLogger(env.LOG_DIR);
 
 const app = express();
+// Render runs behind a proxy/load balancer. This is required so Express knows
+// when the original request is HTTPS and can set Secure cookies correctly.
 app.set('trust proxy', 1);
 
 app.use(helmet());
 
 app.use(cors({
   origin: env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean),
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Authorization'],
 }));
 
 app.use(express.json({ limit: '1mb' }));
@@ -39,12 +42,17 @@ const csrfProtection = csurf({
   cookie: {
     key: 'csrf_secret',
     httpOnly: true,
-    sameSite: 'strict',
-    secure: env.COOKIE_SECURE
+    // Frontend and backend are on different domains in Render (cross-site).
+    // Browsers will reject cookies with SameSite=Lax/Strict in that case.
+    // For production, use SameSite=None + Secure.
+    sameSite: env.COOKIE_SECURE ? 'none' : 'lax',
+    secure: env.COOKIE_SECURE,
+    path: '/'
   }
 });
 
-
+// Health check (use /health in Render settings). Also keep / non-404 to avoid noise.
+app.get('/', (_req, res) => res.status(200).send('OK'));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 // Init Firebase Admin lazily (throws if env missing)
