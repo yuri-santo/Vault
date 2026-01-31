@@ -2186,94 +2186,123 @@ export default function Dashboard({
             </div>
           </div>
           )}
-          {((form as any).entryType === 'vpn') && (
-          <div className="sm:col-span-2">
-            <div className="flex items-center justify-between gap-3">
-              <label className="text-xs font-medium text-zinc-600">Conexão VPN (campos)</label>
-              <Button type="button" variant="secondary" onClick={() => copyText(JSON.stringify(vpnConn, null, 2))} title="Copiar JSON">
-                <Icon name="copy" className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[11px] text-zinc-500">Provider</label>
-                <div className="flex gap-2">
-                  <Input value={vpnConn.provider} onChange={(e) => setVpnConn((p) => ({ ...p, provider: e.target.value }))} placeholder="ex.: FortiClient" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.provider)} disabled={!vpnConn.provider.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-[11px] text-zinc-500">Server / Gateway</label>
-                <div className="flex gap-2">
-                  <Input value={vpnConn.server} onChange={(e) => setVpnConn((p) => ({ ...p, server: e.target.value }))} placeholder="ex.: vpn.empresa.com" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.server)} disabled={!vpnConn.server.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Port</label>
-                <div className="flex gap-2">
-                  <Input value={vpnConn.port} onChange={(e) => setVpnConn((p) => ({ ...p, port: e.target.value }))} placeholder="ex.: 443" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.port)} disabled={!vpnConn.port.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Protocol</label>
-                <div className="flex gap-2">
-                  <Input value={vpnConn.protocol} onChange={(e) => setVpnConn((p) => ({ ...p, protocol: e.target.value }))} placeholder="ex.: SSL-VPN" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.protocol)} disabled={!vpnConn.protocol.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Username</label>
-                <div className="flex gap-2">
-                  <Input value={vpnConn.username} onChange={(e) => setVpnConn((p) => ({ ...p, username: e.target.value }))} placeholder="ex.: rafael" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.username)} disabled={!vpnConn.username.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Domain/Realm</label>
-                <div className="flex gap-2">
-                  <Input value={vpnConn.domain} onChange={(e) => setVpnConn((p) => ({ ...p, domain: e.target.value }))} placeholder="ex.: AD" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.domain)} disabled={!vpnConn.domain.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div className="sm:col-span-3">
-                <label className="text-[11px] text-zinc-500">Profile / Observações</label>
-                <div className="flex gap-2">
-                  <Textarea value={vpnConn.profile} onChange={(e) => setVpnConn((p) => ({ ...p, profile: e.target.value }))} rows={2} placeholder="ex.: profile name / split tunneling / etc" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.profile)} disabled={!vpnConn.profile.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div className="sm:col-span-3">
-                <label className="text-[11px] text-zinc-500">Notas VPN</label>
-                <Textarea value={vpnConn.notes} onChange={(e) => setVpnConn((p) => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Tokens, certificados, passos..." />
-              </div>
-            </div>
-          </div>
-
           
-          )}
-	          {((form as any).entryType !== 'website') && (
-	            <div className="sm:col-span-2">
-	              <div className="flex items-center justify-between gap-3">
-	                <label className="text-xs font-medium text-zinc-600">Dados gerais / JSON (env, configs, apps)</label>
-	                <Button type="button" variant="secondary" onClick={() => copyText(metaJsonText)} disabled={!metaJsonText.trim()} title="Copiar">
-	                  <Icon name="copy" className="h-4 w-4" />
-	                </Button>
-	              </div>
-	              <Textarea
-	                value={metaJsonText}
-	                onChange={(e) => setMetaJsonText(e.target.value)}
-	                rows={4}
-	                placeholder={'Cole um JSON (ex.: {"env": {"API_URL": "..."}, "urls": [...]}) ou texto livre'}
-	              />
-	              <div className="mt-1 text-[11px] text-zinc-500">
-	                Dica: se você colar um JSON válido aqui, o sistema salva estruturado e facilita filtros no futuro.
-	              </div>
-	            </div>
-	          )}
+          {((form as any).entryType === 'vpn') && (
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-600">Conexão VPN (campos)</label>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => copyText(JSON.stringify(vpnConn, null, 2))}
+                  title="Copiar JSON"
+                >
+                  <Icon name="copy" className="h-4 w-4" />
+                </Button>
+              </div>
 
-          <div className="sm:col-span-2">
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] text-zinc-500">Provider</label>
+                  <div className="flex gap-2">
+                    <Input value={vpnConn.provider} onChange={(e) => setVpnConn((p) => ({ ...p, provider: e.target.value }))} placeholder="ex.: FortiClient" />
+                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.provider)} disabled={!vpnConn.provider.trim()} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] text-zinc-500">Server / Gateway</label>
+                  <div className="flex gap-2">
+                    <Input value={vpnConn.server} onChange={(e) => setVpnConn((p) => ({ ...p, server: e.target.value }))} placeholder="ex.: vpn.empresa.com" />
+                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.server)} disabled={!vpnConn.server.trim()} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-zinc-500">Port</label>
+                  <div className="flex gap-2">
+                    <Input value={vpnConn.port} onChange={(e) => setVpnConn((p) => ({ ...p, port: e.target.value }))} placeholder="ex.: 443" />
+                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.port)} disabled={!vpnConn.port.trim()} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-zinc-500">Protocol</label>
+                  <div className="flex gap-2">
+                    <Input value={vpnConn.protocol} onChange={(e) => setVpnConn((p) => ({ ...p, protocol: e.target.value }))} placeholder="ex.: SSL-VPN" />
+                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.protocol)} disabled={!vpnConn.protocol.trim()} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-zinc-500">Username</label>
+                  <div className="flex gap-2">
+                    <Input value={vpnConn.username} onChange={(e) => setVpnConn((p) => ({ ...p, username: e.target.value }))} placeholder="ex.: rafael" />
+                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.username)} disabled={!vpnConn.username.trim()} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-zinc-500">Domain/Realm</label>
+                  <div className="flex gap-2">
+                    <Input value={vpnConn.domain} onChange={(e) => setVpnConn((p) => ({ ...p, domain: e.target.value }))} placeholder="ex.: AD" />
+                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.domain)} disabled={!vpnConn.domain.trim()} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="sm:col-span-3">
+                  <label className="text-[11px] text-zinc-500">Profile / Observações</label>
+                  <div className="flex gap-2">
+                    <Textarea value={vpnConn.profile} onChange={(e) => setVpnConn((p) => ({ ...p, profile: e.target.value }))} rows={2} placeholder="ex.: profile name / split tunneling / etc" />
+                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.profile)} disabled={!vpnConn.profile.trim()} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="sm:col-span-3">
+                  <label className="text-[11px] text-zinc-500">Notas VPN</label>
+                  <Textarea value={vpnConn.notes} onChange={(e) => setVpnConn((p) => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Tokens, certificados, passos..." />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {((form as any).entryType !== 'website') && (
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-zinc-600">Dados gerais / JSON (env, configs, apps)</label>
+                <Button type="button" variant="secondary" onClick={() => copyText(metaJsonText)} disabled={!metaJsonText.trim()} title="Copiar">
+                  <Icon name="copy" className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <Textarea
+                value={metaJsonText}
+                onChange={(e) => setMetaJsonText(e.target.value)}
+                rows={4}
+                placeholder={'Cole um JSON (ex.: {"env": {"API_URL": "..."}, "urls": [...]}) ou texto livre'}
+              />
+
+              <div className="mt-1 text-[11px] text-zinc-500">
+                Dica: se você colar um JSON válido aqui, o sistema salva estruturado e facilita filtros no futuro.
+              </div>
+            </div>
+          )}
+
+<div className="sm:col-span-2">
             <label className="text-xs font-medium text-zinc-600">Notas</label>
             <Textarea
               value={form.notes}
