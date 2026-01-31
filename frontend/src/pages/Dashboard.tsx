@@ -2082,15 +2082,17 @@ export default function Dashboard({
           </div>
         )}
           {((form as any).entryType !== 'json') && (
-          <div>
-            <label className="text-xs font-medium text-zinc-600">Usuário</label>
-            <Input value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} placeholder="Ex.: root" />
-          </div>
+            <>
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Usuário</label>
+                <Input value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} placeholder="Ex.: root" />
+              </div>
 
-          <div>
-            <label className="text-xs font-medium text-zinc-600">Senha</label>
-            <Input value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" />
-          </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Senha</label>
+                <Input value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" />
+              </div>
+            </>
           )}
           {((form as any).entryType === 'generic') && (
           <div>
