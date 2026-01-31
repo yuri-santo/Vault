@@ -2082,17 +2082,15 @@ export default function Dashboard({
           </div>
         )}
           {((form as any).entryType !== 'json') && (
-            <>
-              <div>
-                <label className="text-xs font-medium text-zinc-600">Usuário</label>
-                <Input value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} placeholder="Ex.: root" />
-              </div>
+          <div>
+            <label className="text-xs font-medium text-zinc-600">Usuário</label>
+            <Input value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} placeholder="Ex.: root" />
+          </div>
 
-              <div>
-                <label className="text-xs font-medium text-zinc-600">Senha</label>
-                <Input value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" />
-              </div>
-            </>
+          <div>
+            <label className="text-xs font-medium text-zinc-600">Senha</label>
+            <Input value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" />
+          </div>
           )}
           {((form as any).entryType === 'generic') && (
           <div>
@@ -2255,25 +2253,25 @@ export default function Dashboard({
 
           
           )}
-          {((form as any).entryType !== 'website') && (
-          <div className="sm:col-span-2">
-            <div className="flex items-center justify-between gap-3">
-              <label className="text-xs font-medium text-zinc-600">Dados gerais / JSON (env, configs, apps)</label>
-              <Button type="button" variant="secondary" onClick={() => copyText(metaJsonText)} disabled={!metaJsonText.trim()} title="Copiar">
-                <Icon name="copy" className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-            <Textarea
-              value={metaJsonText}
-              onChange={(e) => setMetaJsonText(e.target.value)}
-              rows={4}
-              placeholder={'Cole um JSON (ex.: {"env": {"API_URL": "..."}, "urls": [...]}) ou texto livre'}
-            />
-            <div className="mt-1 text-[11px] text-zinc-500">
-              Dica: se você colar um JSON válido aqui, o sistema salva estruturado e facilita filtros no futuro.
-            </div>
-          </div>
+	          {((form as any).entryType !== 'website') && (
+	            <div className="sm:col-span-2">
+	              <div className="flex items-center justify-between gap-3">
+	                <label className="text-xs font-medium text-zinc-600">Dados gerais / JSON (env, configs, apps)</label>
+	                <Button type="button" variant="secondary" onClick={() => copyText(metaJsonText)} disabled={!metaJsonText.trim()} title="Copiar">
+	                  <Icon name="copy" className="h-4 w-4" />
+	                </Button>
+	              </div>
+	              <Textarea
+	                value={metaJsonText}
+	                onChange={(e) => setMetaJsonText(e.target.value)}
+	                rows={4}
+	                placeholder={'Cole um JSON (ex.: {"env": {"API_URL": "..."}, "urls": [...]}) ou texto livre'}
+	              />
+	              <div className="mt-1 text-[11px] text-zinc-500">
+	                Dica: se você colar um JSON válido aqui, o sistema salva estruturado e facilita filtros no futuro.
+	              </div>
+	            </div>
+	          )}
 
           <div className="sm:col-span-2">
             <label className="text-xs font-medium text-zinc-600">Notas</label>
