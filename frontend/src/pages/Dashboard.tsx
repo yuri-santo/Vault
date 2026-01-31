@@ -40,7 +40,7 @@ import {
 import { Modal } from '../components/modal';
 import { useToast } from '../components/toast';
 
-function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive' | 'projects' | 'folder' | 'file' | 'note' | 'search' | 'filter' | 'dots' | 'copy' | 'eye' | 'edit' | 'trash' | 'plus' | 'externalLink'; className?: string }) {
+function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive' | 'projects' | 'folder' | 'file' | 'note' | 'search' | 'filter' | 'dots' | 'copy' | 'eye' | 'edit' | 'trash' | 'plus' | 'externalLink' | 'menu' | 'x' | 'info'; className?: string }) {
   const common = cn('inline-block', className);
   // Tiny inline icons (no deps)
   switch (name) {
@@ -162,6 +162,26 @@ function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive'
           <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       );
+    case 'menu':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'x':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'info':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M12 10v7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M12 7h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
   }
 }
 
@@ -245,12 +265,14 @@ function EntryActions({
   entry,
   revealed,
   onRevealToggle,
+  onView,
   onEdit,
   onDelete,
 }: {
   entry: VaultEntry;
   revealed: boolean;
   onRevealToggle: () => void;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -277,6 +299,15 @@ function EntryActions({
 
       {open && (
         <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-zinc-200 bg-white shadow-soft p-2 z-20">
+          <MenuItem
+            icon={<Icon name="info" className="h-4 w-4" />}
+            label="Ver detalhes"
+            onClick={() => {
+              onView();
+              setOpen(false);
+            }}
+          />
+
           <MenuItem
             icon={<Icon name="copy" className="h-4 w-4" />}
             label="Copiar usuário"
@@ -386,6 +417,7 @@ function EntryInlineActions({
   entry,
   revealed,
   onRevealToggle,
+  onView,
   onShare,
   onEdit,
   onDelete,
@@ -394,6 +426,7 @@ function EntryInlineActions({
   entry: VaultEntry;
   revealed: boolean;
   onRevealToggle: () => void;
+  onView: () => void;
   onShare: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -423,6 +456,20 @@ function EntryInlineActions({
         onClick={onRevealToggle}
       >
         <Icon name="eye" className="h-4 w-4" />
+      </IconActionButton>
+
+      <IconActionButton
+        title="Ver detalhes"
+        onClick={onView}
+      >
+        <Icon name="info" className="h-4 w-4" />
+      </IconActionButton>
+
+      <IconActionButton
+        title="Ver detalhes"
+        onClick={onView}
+      >
+        <Icon name="info" className="h-4 w-4" />
       </IconActionButton>
 
       <IconActionButton
@@ -464,6 +511,7 @@ export default function Dashboard({
   const { push } = useToast();
 
   const [section, setSection] = useState<Section>('vault');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
@@ -479,6 +527,9 @@ export default function Dashboard({
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VaultEntry | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewEntry, setViewEntry] = useState<VaultEntry | null>(null);
+  const [viewReveal, setViewReveal] = useState(false);
   const [form, setForm] = useState({
     entryType: 'generic',
     name: '',
@@ -773,6 +824,12 @@ export default function Dashboard({
       notes: e.notes ?? '',
     });
     setModalOpen(true);
+  }
+
+  function openView(e: VaultEntry) {
+    setViewEntry(e);
+    setViewReveal(false);
+    setViewOpen(true);
   }
 
   function openShare(e: VaultEntry) {
@@ -1160,7 +1217,7 @@ export default function Dashboard({
   }) => (
     <button
       type="button"
-      onClick={() => setSection(id)}
+      onClick={() => { setSection(id); setMobileMenuOpen(false); }}
       className={cn(
         'w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm transition',
       section === id
@@ -1175,6 +1232,53 @@ export default function Dashboard({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-slate-50 text-zinc-900">
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileMenuOpen(false)} />
+          <div className="absolute inset-y-0 left-0 w-[86%] max-w-xs bg-white shadow-soft border-r border-zinc-200 p-4 flex flex-col">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-violet-600 to-violet-500 text-white flex items-center justify-center shadow-sm shrink-0">
+                  <Icon name="shield" className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold leading-tight truncate">SecureVault</div>
+                  <div className="text-xs text-zinc-500 truncate">{userEmail}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="h-10 w-10 rounded-2xl border border-zinc-200/70 bg-white flex items-center justify-center text-zinc-700 hover:bg-zinc-50"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Fechar"
+              >
+                <Icon name="x" className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <SectionButton id="vault" label="Minhas Senhas" icon={<Icon name="lock" className="h-5 w-5" />} />
+              <SectionButton id="sharing" label="Compartilhamentos" icon={<Icon name="share" className="h-5 w-5" />} />
+              <SectionButton id="drive" label="Drive Seguro" icon={<Icon name="drive" className="h-5 w-5" />} />
+              <SectionButton id="projects" label="Projetos" icon={<Icon name="projects" className="h-5 w-5" />} />
+              <SectionButton id="notes" label="Bloco de Notas" icon={<Icon name="note" className="h-5 w-5" />} />
+            </div>
+
+            <div className="mt-auto pt-4">
+              <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-3 flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">Conta</div>
+                  <div className="text-xs text-zinc-500 truncate">{userEmail}</div>
+                </div>
+                <Button variant="secondary" className="px-3 py-2" onClick={() => { setMobileMenuOpen(false); onLogout(); }} >
+                  Sair
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex">
         {/* Sidebar */}
         <aside className="hidden md:flex w-72 min-h-screen sticky top-0 p-5">
@@ -1193,6 +1297,7 @@ export default function Dashboard({
               <SectionButton id="vault" label="Minhas Senhas" icon={<Icon name="lock" className="h-5 w-5" />} />
               <SectionButton id="sharing" label="Compartilhamentos" icon={<Icon name="share" className="h-5 w-5" />} />
               <SectionButton id="drive" label="Drive Seguro" icon={<Icon name="drive" className="h-5 w-5" />} />
+              <SectionButton id="projects" label="Projetos" icon={<Icon name="projects" className="h-5 w-5" />} />
               <SectionButton id="notes" label="Bloco de Notas" icon={<Icon name="note" className="h-5 w-5" />} />
             </div>
 
@@ -1217,6 +1322,14 @@ export default function Dashboard({
             <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-5">
               <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="md:hidden h-10 w-10 rounded-2xl border border-zinc-200/70 bg-white/80 backdrop-blur shadow-sm flex items-center justify-center text-violet-700 hover:bg-white"
+                    onClick={() => setMobileMenuOpen(true)}
+                    aria-label="Menu"
+                  >
+                    <Icon name="menu" className="h-6 w-6" />
+                  </button>
                   <div className="md:hidden h-10 w-10 rounded-2xl bg-gradient-to-br from-violet-600 to-violet-500 text-white flex items-center justify-center">
                     <Icon name="shield" className="h-6 w-6" />
                   </div>
@@ -1436,6 +1549,7 @@ export default function Dashboard({
                                   entry={e}
                                   revealed={revealed}
                                   onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                                  onView={() => openView(e)}
                                   onShare={() => openShare(e)}
                                   onEdit={() => openEdit(e)}
                                   onDelete={() => removeEntry(e)}
@@ -1443,7 +1557,7 @@ export default function Dashboard({
                                 />
                               </div>
 
-                              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
                                   <div className="text-[11px] uppercase tracking-wide text-zinc-500">Usuário</div>
                                   <div className="text-sm text-zinc-800 break-all mt-1">{e.username || '—'}</div>
@@ -1506,6 +1620,7 @@ export default function Dashboard({
                                   entry={e}
                                   revealed={revealed}
                                   onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                                  onView={() => openView(e)}
                                   onShare={() => openShare(e)}
                                   onEdit={() => openEdit(e)}
                                   onDelete={() => removeEntry(e)}
@@ -2040,8 +2155,9 @@ export default function Dashboard({
         open={modalOpen}
         title={editing ? 'Editar senha' : 'Nova senha'}
         onClose={() => setModalOpen(false)}
+        size="xl"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="text-xs font-medium text-zinc-600">Tipo de credencial</label>
             <select
@@ -2329,6 +2445,137 @@ export default function Dashboard({
           </Button>
           <Button onClick={saveEntry}>{editing ? 'Salvar alterações' : 'Criar senha'}</Button>
         </div>
+
+      {/* Modal view details */}
+      <Modal
+        open={viewOpen}
+        title={viewEntry ? `Senha: ${viewEntry.name}` : 'Detalhes da senha'}
+        onClose={() => setViewOpen(false)}
+        size="lg"
+      >
+        {viewEntry ? (
+          (() => {
+            const ve: any = viewEntry;
+            const safeParse = (v: any) => {
+              if (!v) return null;
+              if (typeof v === 'object') return v;
+              if (typeof v !== 'string') return null;
+              const t = v.trim();
+              if (!t) return null;
+              try {
+                if (t.startsWith('{') && t.endsWith('}')) return JSON.parse(t);
+              } catch {
+                return null;
+              }
+              return null;
+            };
+
+            const sap = ve.sapJson ?? safeParse(ve.sapConnection);
+            const vpn = ve.vpnJson ?? safeParse(ve.vpnConnection);
+            const meta = ve.connectionJson ?? safeParse(ve.connectionData);
+            const pass = ve.password ?? '';
+            const url = ve.url ? (String(ve.url).startsWith('http') ? ve.url : `https://${ve.url}`) : '';
+
+            const Row = ({ label, value, copyable = true, mono = false, openUrl = false }: any) => (
+              <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</div>
+                    {openUrl && value ? (
+                      <a
+                        href={value}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn('mt-1 text-sm break-all text-violet-700 hover:underline', mono && 'font-mono')}
+                      >
+                        {value}
+                      </a>
+                    ) : (
+                      <div className={cn('mt-1 text-sm break-all text-zinc-800', mono && 'font-mono')}>
+                        {value || '—'}
+                      </div>
+                    )}
+                  </div>
+                  {copyable && value ? (
+                    <Button type="button" variant="secondary" onClick={() => copyText(String(value))} title="Copiar">
+                      <Icon name="copy" className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+
+            const JsonBlock = ({ title, obj }: any) => (
+              <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-wide text-zinc-500">{title}</div>
+                    <div className="mt-2 text-xs font-mono whitespace-pre-wrap break-words text-zinc-800 max-h-56 overflow-y-auto">
+                      {JSON.stringify(obj, null, 2)}
+                    </div>
+                  </div>
+                  <Button type="button" variant="secondary" onClick={() => copyText(JSON.stringify(obj, null, 2))} title="Copiar JSON">
+                    <Icon name="copy" className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+
+            return (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">{ve.name}</span>
+                    {ve.isShared ? (
+                      <span className="text-xs rounded-full bg-violet-100 text-violet-800 px-2 py-1">Compartilhado</span>
+                    ) : (
+                      <span className="text-xs rounded-full bg-zinc-100 text-zinc-700 px-2 py-1">Privado</span>
+                    )}
+                    {ve.ownerEmail ? (
+                      <span className="text-xs text-zinc-500">• Dono: {ve.ownerEmail}</span>
+                    ) : null}
+                    {ve.sharedByEmail ? (
+                      <span className="text-xs text-zinc-500">• Compartilhado por: {ve.sharedByEmail}</span>
+                    ) : null}
+                  </div>
+                  {ve.notes ? <div className="mt-2 text-sm text-zinc-700 whitespace-pre-wrap">{ve.notes}</div> : null}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Row label="Usuário" value={ve.username} />
+                  <Row label="E-mail" value={ve.email} />
+                  <Row label="IP / Host" value={ve.ip} mono />
+                  <Row label="URL" value={url} openUrl copyable={!!url} />
+                </div>
+
+                <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] uppercase tracking-wide text-zinc-500">Senha</div>
+                      <div className="mt-1 text-sm font-mono break-all text-zinc-800">
+                        {pass ? (viewReveal ? pass : maskPassword(pass)) : '—'}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="secondary" onClick={() => setViewReveal((p) => !p)} disabled={!pass} title={viewReveal ? 'Ocultar' : 'Mostrar'}>
+                        <Icon name="eye" className="h-4 w-4" />
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => copyText(String(pass))} disabled={!pass} title="Copiar senha">
+                        <Icon name="copy" className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {sap ? <JsonBlock title="Conexão SAP" obj={sap} /> : null}
+                {vpn ? <JsonBlock title="Conexão VPN" obj={vpn} /> : null}
+                {meta ? <JsonBlock title="Dados gerais (JSON/ENV/App)" obj={meta} /> : null}
+              </div>
+            );
+          })()
+        ) : (
+          <div className="text-sm text-zinc-500">Nenhuma senha selecionada.</div>
+        )}
       </Modal>
 
       <Modal open={noteModalOpen} title={editingNote ? 'Editar nota' : 'Nova nota'} onClose={() => setNoteModalOpen(false)}>
@@ -2396,7 +2643,7 @@ export default function Dashboard({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm">
               <input
                 type="checkbox"
@@ -2529,7 +2776,7 @@ export default function Dashboard({
           <div className="text-sm text-zinc-600">Selecione uma demanda.</div>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
                 <label className="text-xs font-medium text-zinc-600">Título</label>
                 <Input
@@ -2611,7 +2858,7 @@ export default function Dashboard({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-zinc-600">Notas de QA</label>
                 <Textarea
