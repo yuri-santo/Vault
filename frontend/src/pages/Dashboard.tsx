@@ -2079,8 +2079,8 @@ export default function Dashboard({
                 <Icon name="copy" className="h-4 w-4" />
               </Button>
             </div>
-          )}
           </div>
+        )}
           {((form as any).entryType !== 'json') && (
           <div>
             <label className="text-xs font-medium text-zinc-600">Usuário</label>
