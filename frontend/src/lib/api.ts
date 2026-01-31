@@ -222,7 +222,7 @@ export async function browseDrive(parentId?: string | null) {
   return data as { items: DriveItem[]; needsSetup?: boolean; parentId?: string | null; rootFolderId?: string | null };
 }
 
-export async function uploadDriveFile(file: File) {
+export async function uploadDriveFile(file: File, opts?: { folderLink?: string; persistFolder?: boolean }) {
   // JSON upload (base64) to avoid multipart parsing deps.
   // Backend may reply with 501 if upload is not configured.
   const buf = await file.arrayBuffer();
@@ -231,6 +231,8 @@ export async function uploadDriveFile(file: File) {
     fileName: file.name,
     mimeType: file.type || 'application/octet-stream',
     dataBase64: b64,
+    folderLink: opts?.folderLink,
+    persistFolder: opts?.persistFolder ? true : false,
   });
   return data as { ok: boolean; file: DriveFile };
 }
@@ -258,6 +260,11 @@ export async function deleteNoteItem(id: string) {
   return data as { ok: boolean };
 }
 
+export async function moveDriveFile(fileId: string, destFolderLink: string) {
+  const { data } = await api.post('/drive/move', { fileId, folderLink: destFolderLink });
+  return data as { ok: boolean; moved?: any };
+}
+
 export async function deleteDriveFile(fileId: string) {
   const { data } = await api.delete(`/drive/files/${fileId}`);
   return data as { ok: boolean };
@@ -266,6 +273,10 @@ export async function deleteDriveFile(fileId: string) {
 // Projetos / Kanban
 export type Project = {
   id: string;
+  ownerEmail?: string | null;
+  sharedWith?: string[] | null;
+  shareLog?: Array<{ at: string; byUid: string; byEmail?: string | null; toUid: string; toEmail?: string | null }> | null;
+  _access?: 'owner' | 'shared';
   projectType?: 'sap' | 'general';
   name: string;
   description?: string | null;
@@ -328,4 +339,33 @@ export async function getProjectBoard(id: string) {
 export async function saveProjectBoard(id: string, board: ProjectBoard) {
   const { data } = await api.put(`/projects/${id}/board`, { board });
   return data as { ok: boolean };
+}
+
+
+// Projetos — Post-its (stickies)
+export type StickyNote = {
+  id: string;
+  text: string;
+  color?: 'yellow' | 'pink' | 'blue' | 'green' | 'purple';
+  x?: number;
+  y?: number;
+  rotation?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+};
+
+export async function shareProject(id: string, payload: { uids?: string[]; emails?: string[] }) {
+  const { data } = await api.post(`/projects/${id}/share`, payload);
+  return data as { ok: boolean; sharedWith: string[] };
+}
+
+export async function getProjectStickies(id: string) {
+  const { data } = await api.get(`/projects/${id}/stickies`);
+  return data as { stickies: StickyNote[] };
+}
+
+export async function saveProjectStickies(id: string, stickies: StickyNote[]) {
+  const { data } = await api.put(`/projects/${id}/stickies`, { stickies });
+  return data as { ok: boolean; stickies: StickyNote[] };
 }

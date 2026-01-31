@@ -23,6 +23,9 @@ O resultado é simples de medir:
 ## Principais funcionalidades
 
 - **Cofre criptografado** para credenciais técnicas (AES-256-GCM por campo)
+- **Tipos de credencial** (formulário inteligente)
+  - Genérica, Site/Login Web, SAP, VPN, JSON/ENV/App
+  - O modal de edição **esconde campos irrelevantes** conforme o tipo (fica mais limpo e rápido de preencher)
 - **Campos prontos para operação**: URL/Endpoint (clicável), IP/Host, usuário, senha, e-mail e notas
 - **Conexões estruturadas** (sem “texto solto”): cada dado em seu campo
   - **SAP**: Application Server, Instance Number, System ID (SID), Client, Language, SAProuter, Message Server, Logon Group, SNC Name
@@ -30,6 +33,7 @@ O resultado é simples de medir:
   - **JSON livre**: guarde informações de `.env`, parâmetros de apps, chaves e configurações como objeto JSON
   - **Copiar com 1 clique** em qualquer campo (usuário, senha, router, host, etc.)
 - **Compartilhamento real de senhas** (por entrada)
+  - Seleção de conexões aceitas **e/ou** compartilhamento direto por **lista de e-mails** (separados por vírgula, espaço ou linha)
   - convites e conexões entre usuários (aceite/recusa)
   - botão **Compartilhar** dentro da senha para escolher destinatários
   - no painel do destinatário a senha aparece como **"Compartilhado por <dono>"** e os campos ficam disponíveis para copiar
@@ -39,8 +43,11 @@ O resultado é simples de medir:
 - **Projetos + Kanban (estilo Jira)**
   - criar projetos e manter um board com colunas e cartões
   - mover cartões entre colunas e persistir tudo por usuário
-  - tipos de projeto: **SAP** (colunas Dev/QA/Produção/Aprovadas) e **Geral** (Review/Done/Aprovadas)
-  - campos em cartão: **estimativa de horas**, tags, comentários e área para colar e-mails/briefings
+  - tipos de projeto:
+    - **SAP**: Backlog → Análise → Dev → QA → Pronto p/ Produção → Em Produção → Finalizado em Produção → Demandas Aprovadas
+    - **Geral**: Backlog → In Progress → Review → Done → Approved
+  - no projeto você pode definir **R$/hora** (opcional)
+  - detalhes do cartão (modal): tipo (task/bug/story/research), **estimativa (h)**, tags, **comentários**, área para colar/registrar **e-mails** (assunto + corpo), notas de QA e Produção, e flag **“demanda aprovada”** (com timestamp)
 - **Drive Explorer (estilo Finder/Mac)**
   - salvar um link público de pasta do Google Drive por usuário (pode trocar quando quiser)
   - navegar por pastas/arquivos e copiar link com 1 clique
@@ -91,6 +98,7 @@ Se você quiser evoluir para multi-tenant (por time/empresa) ou permissões por 
 
 Cada registro pode conter:
 
+- **Tipo da entrada** (`entryType`: generic/website/sap/vpn/json)
 - **Nome da entrada**
 - **IP**
 - **Usuário**

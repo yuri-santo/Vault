@@ -7,6 +7,8 @@ import {
   browseDrive,
   createProject,
   deleteDriveFile,
+  moveDriveFile,
+  uploadDriveFile,
   deleteEntry,
   deleteProject,
   getDriveSettings,
@@ -28,6 +30,9 @@ import {
   updateEntry,
   updateEntryShare,
   updateProject,
+  shareProject,
+  getProjectStickies,
+  saveProjectStickies,
   type DriveFile,
   type DriveItem,
   type Project,
@@ -36,6 +41,7 @@ import {
   type ShareInvite,
   type VaultEntry,
   type NoteItem,
+  type StickyNote,
 } from '../lib/api';
 import { Modal } from '../components/modal';
 import { useToast } from '../components/toast';
@@ -281,6 +287,15 @@ function EntryActions({
   useOutsideClick(boxRef, () => setOpen(false));
   const { push } = useToast();
 
+  function parseApiError(err: any, fallback: string) {
+    const e = err?.response?.data?.error;
+    if (typeof e === 'string') return e;
+    if (e?.message) return String(e.message);
+    if (err?.message) return String(err.message);
+    return fallback;
+  }
+
+
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
     push(`${label} copiado ✅`, 'success');
@@ -434,6 +449,15 @@ function EntryInlineActions({
 }) {
   const { push } = useToast();
 
+  function parseApiError(err: any, fallback: string) {
+    const e = err?.response?.data?.error;
+    if (typeof e === 'string') return e;
+    if (e?.message) return String(e.message);
+    if (err?.message) return String(err.message);
+    return fallback;
+  }
+
+
   async function copyPassword() {
     if (!entry.password) return;
     await navigator.clipboard.writeText(entry.password);
@@ -456,13 +480,6 @@ function EntryInlineActions({
         onClick={onRevealToggle}
       >
         <Icon name="eye" className="h-4 w-4" />
-      </IconActionButton>
-
-      <IconActionButton
-        title="Ver detalhes"
-        onClick={onView}
-      >
-        <Icon name="info" className="h-4 w-4" />
       </IconActionButton>
 
       <IconActionButton
@@ -509,6 +526,15 @@ export default function Dashboard({
   onLogout: () => void;
 }) {
   const { push } = useToast();
+
+  function parseApiError(err: any, fallback: string) {
+    const e = err?.response?.data?.error;
+    if (typeof e === 'string') return e;
+    if (e?.message) return String(e.message);
+    if (err?.message) return String(err.message);
+    return fallback;
+  }
+
 
   const [section, setSection] = useState<Section>('vault');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -619,6 +645,13 @@ export default function Dashboard({
   const [driveItems, setDriveItems] = useState<DriveItem[]>([]);
   const [driveExplorerLoading, setDriveExplorerLoading] = useState(false);
 
+  // Drive Upload/Move
+  const [driveUploadOpen, setDriveUploadOpen] = useState(false);
+  const [driveUploadFolderLink, setDriveUploadFolderLink] = useState('');
+  const [driveMoveOpen, setDriveMoveOpen] = useState(false);
+  const [driveMoveItem, setDriveMoveItem] = useState<DriveItem | null>(null);
+  const [driveMoveDest, setDriveMoveDest] = useState('');
+
   // Projects / Kanban
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -648,6 +681,18 @@ export default function Dashboard({
   const [newCardTitle, setNewCardTitle] = useState('');
   const [newCardDesc, setNewCardDesc] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
+
+  // Project sharing
+  const [projectShareOpen, setProjectShareOpen] = useState(false);
+  const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
+  const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<Record<string, boolean>>({});
+  const [projectShareExtraEmails, setProjectShareExtraEmails] = useState('');
+
+  // Post-its (stickies)
+  const [projectStickies, setProjectStickies] = useState<StickyNote[]>([]);
+  const [stickiesLoading, setStickiesLoading] = useState(false);
+  const stickiesSaveTimer = useRef<any>(null);
+  const stickyDragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null);
 
   // Notes
   const [notes, setNotes] = useState('');
@@ -744,6 +789,20 @@ export default function Dashboard({
         setProjectBoard(null);
       })
       .finally(() => setProjectBoardLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId]);
+
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setProjectStickies([]);
+      return;
+    }
+    setStickiesLoading(true);
+    getProjectStickies(activeProjectId)
+      .then((res) => setProjectStickies(res.stickies ?? []))
+      .catch(() => setProjectStickies([]))
+      .finally(() => setStickiesLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
 
@@ -1062,6 +1121,104 @@ export default function Dashboard({
       push('Falha ao salvar board', 'error');
     }
   }
+
+  function scheduleSaveStickies(next: StickyNote[]) {
+    setProjectStickies(next);
+    if (!activeProjectId) return;
+    if (stickiesSaveTimer.current) clearTimeout(stickiesSaveTimer.current);
+    stickiesSaveTimer.current = setTimeout(async () => {
+      try {
+        await saveProjectStickies(activeProjectId, next);
+      } catch (e: any) {
+        push(parseApiError(e, 'Falha ao salvar post-its'), 'error');
+      }
+    }, 700);
+  }
+
+  async function openProjectShare(project: Project) {
+    setProjectShareTarget(project);
+    setProjectShareSelectedUids({});
+    setProjectShareExtraEmails('');
+    setProjectShareOpen(true);
+  }
+
+  async function confirmProjectShare() {
+    if (!projectShareTarget) return;
+    const uids = Object.entries(projectShareSelectedUids).filter(([, v]) => v).map(([k]) => k);
+    const emails = projectShareExtraEmails
+      .split(/[\n,;]/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    if (uids.length === 0 && emails.length === 0) return push('Selecione um usuário ou informe um e-mail', 'error');
+
+    try {
+      await shareProject(projectShareTarget.id, { uids, emails });
+      push('Projeto compartilhado ✅', 'success');
+      setProjectShareOpen(false);
+      // reload projects
+      const projs = await listProjects().catch(() => ({ projects: [] } as any));
+      setProjects((projs as any).projects ?? []);
+    } catch (e: any) {
+      push(parseApiError(e, 'Falha ao compartilhar projeto'), 'error');
+    }
+  }
+
+  function newSticky() {
+    const id = `s_${Math.random().toString(36).slice(2, 10)}`;
+    const rot = Math.round((Math.random() * 10 - 5));
+    const colors: any[] = ['yellow', 'pink', 'blue', 'green', 'purple'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const now = new Date().toISOString();
+    const next = [
+      ...projectStickies,
+      { id, text: 'Novo lembrete...', color, x: 30 + projectStickies.length * 18, y: 20 + projectStickies.length * 10, rotation: rot, createdAt: now, updatedAt: now },
+    ];
+    scheduleSaveStickies(next);
+  }
+
+  function updateSticky(id: string, patch: Partial<StickyNote>) {
+    const now = new Date().toISOString();
+    const next = projectStickies.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: now } : s));
+    scheduleSaveStickies(next);
+  }
+
+  function removeSticky(id: string) {
+    const next = projectStickies.filter((s) => s.id !== id);
+    scheduleSaveStickies(next);
+  }
+
+
+  function onStickyPointerDown(e: React.PointerEvent<HTMLDivElement>, id: string) {
+    const s = projectStickies.find((x) => x.id === id);
+    if (!s) return;
+    (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+    stickyDragRef.current = {
+      id,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: Number(s.x ?? 0),
+      originY: Number(s.y ?? 0),
+    };
+  }
+
+  function onStickyPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = stickyDragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    const next = projectStickies.map((s) =>
+      s.id === d.id ? { ...s, x: Math.max(0, Math.min((d.originX + dx), 1200)), y: Math.max(0, Math.min((d.originY + dy), 600)) } : s
+    );
+    setProjectStickies(next);
+  }
+
+  function onStickyPointerUp() {
+    if (!stickyDragRef.current) return;
+    stickyDragRef.current = null;
+    scheduleSaveStickies(projectStickies);
+  }
+
+
 
   async function addKanbanCard(columnId: string) {
     if (!projectBoard) return;
@@ -1822,9 +1979,14 @@ export default function Dashboard({
                       <div className="text-xs font-semibold text-zinc-600">Explorer (estilo Finder)</div>
                       <div className="text-xs text-zinc-500">Navegue pelas pastas do link salvo (pastas e arquivos).</div>
                     </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                    <Button variant="secondary" onClick={() => setDriveUploadOpen(true)} disabled={!driveEnabled || driveNeedsSetup}>
+                      Enviar arquivo
+                    </Button>
                     <Button variant="secondary" onClick={openDriveRoot} disabled={driveExplorerLoading || driveNeedsSetup}>
                       Abrir raiz
                     </Button>
+                    </div>
                   </div>
 
                   <div className="mt-2 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-4">
@@ -1887,6 +2049,19 @@ export default function Dashboard({
                                   >
                                     Copiar link
                                   </Button>
+                                  {!it.isFolder && (
+                                    <Button
+                                      variant="secondary"
+                                      onClick={() => {
+                                        setDriveMoveItem(it);
+                                        setDriveMoveDest(driveFolder);
+                                        setDriveMoveOpen(true);
+                                      }}
+                                      disabled={!driveEnabled}
+                                    >
+                                      Mover
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             ))
@@ -1947,14 +2122,45 @@ export default function Dashboard({
                         <div className="text-sm text-zinc-500">Crie um projeto para começar.</div>
                       ) : (
                         projects.map((p) => (
-                          <div key={p.id} className={cn('flex items-center justify-between gap-2 rounded-2xl border border-zinc-200/70 px-3 py-2', activeProjectId === p.id ? 'bg-violet-50 border-violet-200' : 'bg-white')}>
+                          <div
+                            key={p.id}
+                            className={cn(
+                              'flex items-center justify-between gap-2 rounded-2xl border border-zinc-200/70 px-3 py-2',
+                              activeProjectId === p.id ? 'bg-violet-50 border-violet-200' : 'bg-white'
+                            )}
+                          >
                             <button type="button" className="min-w-0 text-left flex-1" onClick={() => setActiveProjectId(p.id)}>
-                              <div className="text-sm font-medium truncate">{p.name}</div>
-                              <div className="text-xs text-zinc-500 truncate">Atualizado: {new Date(p.updatedAt).toLocaleDateString()}</div>
+                              <div className="text-sm font-medium truncate flex items-center gap-2">
+                                <span className="truncate">{p.name}</span>
+                                {p._access === 'shared' && (
+                                  <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">
+                                    Compartilhado
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-zinc-500 truncate">
+                                Atualizado: {new Date(p.updatedAt).toLocaleDateString()}
+                                {p._access === 'shared' && p.ownerEmail ? ` • por ${p.ownerEmail}` : ''}
+                              </div>
                             </button>
-                            <button type="button" className="text-zinc-400 hover:text-red-600" onClick={() => removeProject(p.id)} title="Excluir">
-                              <Icon name="trash" className="h-4 w-4" />
-                            </button>
+
+                            <div className="flex items-center gap-1 flex-wrap justify-end">
+                              {p._access !== 'shared' && (
+                                <button
+                                  type="button"
+                                  className="text-zinc-400 hover:text-violet-700"
+                                  onClick={() => openProjectShare(p)}
+                                  title="Compartilhar"
+                                >
+                                  <Icon name="share" className="h-4 w-4" />
+                                </button>
+                              )}
+                              {p._access !== 'shared' && (
+                                <button type="button" className="text-zinc-400 hover:text-red-600" onClick={() => removeProject(p.id)} title="Excluir">
+                                  <Icon name="trash" className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))
                       )}
@@ -1978,6 +2184,86 @@ export default function Dashboard({
                       <div className="text-sm text-zinc-500">Carregando board...</div>
                     ) : (
                       <div className="min-w-[880px]">
+                        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                          <div className="text-sm text-zinc-600">
+                            {projects.find((pp) => pp.id === activeProjectId)?._access === 'shared' ? (
+                              <span>
+                                Acompanhando projeto compartilhado{projects.find((pp) => pp.id === activeProjectId)?.ownerEmail ? ` por ${projects.find((pp) => pp.id === activeProjectId)?.ownerEmail}` : ''}.
+                              </span>
+                            ) : (
+                              <span>Gerencie seu fluxo com um Kanban estilo Jira + post-its.</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Button variant="secondary" onClick={newSticky}>
+                              <Icon name="plus" className="h-4 w-4" /> Post-it
+                            </Button>
+                            {projects.find((pp) => pp.id === activeProjectId)?._access !== 'shared' && (
+                              <Button variant="secondary" onClick={() => {
+                                const p = projects.find((pp) => pp.id === activeProjectId);
+                                if (p) openProjectShare(p);
+                              }}>
+                                <Icon name="share" className="h-4 w-4" /> Compartilhar
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mb-4 rounded-3xl border border-zinc-200/70 bg-gradient-to-b from-zinc-50 to-white p-4 relative overflow-hidden">
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                              <div className="text-xs font-semibold text-zinc-600">Post-its (lembretes rápidos)</div>
+                              <div className="text-xs text-zinc-500">Arraste para organizar. Clique no texto para editar.</div>
+                            </div>
+                            {stickiesLoading ? <div className="text-xs text-zinc-500">Carregando…</div> : <div className="text-xs text-zinc-500">{projectStickies.length} itens</div>}
+                          </div>
+
+                          <div className="mt-3 relative h-[220px] rounded-2xl border border-zinc-200/60 bg-white/80 overflow-hidden">
+                            {projectStickies.length === 0 ? (
+                              <div className="h-full flex items-center justify-center text-sm text-zinc-500">Sem post-its. Clique em <b>Post-it</b> para criar.</div>
+                            ) : (
+                              projectStickies.map((s) => (
+                                <div
+                                  key={s.id}
+                                  className={cn(
+                                    'absolute w-[220px] max-w-[220px] rounded-2xl shadow-sm border border-zinc-200/70 p-3',
+                                    s.color === 'pink' && 'bg-pink-100',
+                                    s.color === 'blue' && 'bg-sky-100',
+                                    s.color === 'green' && 'bg-emerald-100',
+                                    s.color === 'purple' && 'bg-violet-100',
+                                    (!s.color || s.color === 'yellow') && 'bg-amber-100'
+                                  )}
+                                  style={{
+                                    left: `${Math.max(0, Math.min(Number(s.x ?? 0), 900))}px`,
+                                    top: `${Math.max(0, Math.min(Number(s.y ?? 0), 170))}px`,
+                                    transform: `rotate(${Number(s.rotation ?? 0)}deg)`,
+                                  }}
+                                  onPointerDown={(e) => onStickyPointerDown(e, s.id)}
+                                  onPointerMove={onStickyPointerMove}
+                                  onPointerUp={onStickyPointerUp}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="text-[11px] font-semibold text-zinc-700">Lembrete</div>
+                                    <button type="button" className="text-zinc-500 hover:text-red-700" onClick={(e) => { e.stopPropagation(); removeSticky(s.id); }} title="Excluir">
+                                      <Icon name="trash" className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                  <textarea
+                                    className="mt-2 w-full bg-transparent text-sm text-zinc-800 outline-none resize-none"
+                                    rows={5}
+                                    value={s.text}
+                                    onChange={(e) => updateSticky(s.id, { text: e.target.value })}
+                                  />
+                                  <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-600">
+                                    <button type="button" className="hover:text-zinc-900" onClick={() => updateSticky(s.id, { rotation: (Number(s.rotation ?? 0) + 2) })}>Girar</button>
+                                    <button type="button" className="hover:text-zinc-900" onClick={() => navigator.clipboard.writeText(s.text || '').then(() => push('Post-it copiado', 'success'))}>Copiar</button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
                         <div className="grid grid-cols-4 gap-3">
                           {projectBoard.columns.map((col) => (
                             <div key={col.id} className="rounded-3xl border border-zinc-200/70 bg-zinc-50 p-3">
@@ -2769,6 +3055,170 @@ export default function Dashboard({
           </Button>
         </div>
 
+      </Modal>
+
+      {/* Modal compartilhar projeto */}
+      <Modal
+        open={projectShareOpen}
+        title={projectShareTarget ? `Compartilhar projeto: ${projectShareTarget.name}` : 'Compartilhar projeto'}
+        onClose={() => {
+          setProjectShareOpen(false);
+          setProjectShareTarget(null);
+        }}
+      >
+        <div className="text-sm text-zinc-600">
+          Selecione um usuário ou informe um e-mail. O projeto aparecerá na aba <b>Projetos</b> do outro usuário como <b>Compartilhado</b>.
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
+            <div className="font-medium text-zinc-800">Adicionar por e-mail</div>
+            <div className="mt-1 text-xs text-zinc-500">Cole um ou mais e-mails (separados por vírgula, espaço ou linha).</div>
+            <Textarea
+              value={projectShareExtraEmails}
+              onChange={(e) => setProjectShareExtraEmails(e.target.value)}
+              rows={3}
+              placeholder="ex.: consultor@empresa.com, time@cliente.com"
+              className="mt-3 bg-white/90"
+            />
+          </div>
+
+          {connections.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
+              Você ainda não tem conexões aceitas. Vá em <b>Compartilhamento</b> e envie um convite para outro usuário.
+            </div>
+          ) : (
+            connections.map((c) => {
+              const checked = Boolean(projectShareSelectedUids[c.uid]);
+              return (
+                <label key={c.uid} className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="font-medium text-zinc-800 truncate">{c.email ?? c.uid}</div>
+                    <div className="text-xs text-zinc-500 truncate">Conexão aceita</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => setProjectShareSelectedUids((prev) => ({ ...prev, [c.uid]: e.target.checked }))}
+                    className="h-4 w-4 accent-violet-600"
+                  />
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <Button variant="secondary" onClick={() => setProjectShareOpen(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={confirmProjectShare}>Compartilhar</Button>
+        </div>
+      </Modal>
+
+      {/* Modal upload para Drive */}
+      <Modal
+        open={driveUploadOpen}
+        title="Enviar arquivo para o Google Drive"
+        onClose={() => setDriveUploadOpen(false)}
+      >
+        {!driveEnabled ? (
+          <div className="text-sm text-zinc-600">
+            Upload para Drive não está habilitado no servidor. Se você quiser usar essa função, configure a integração no back-end (OAuth token).
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-zinc-600">Destino (link/ID de pasta — opcional)</label>
+              <Input
+                value={driveUploadFolderLink}
+                onChange={(e) => setDriveUploadFolderLink(e.target.value)}
+                placeholder="Cole aqui o link compartilhado da pasta do Drive (opcional)"
+              />
+              <div className="mt-1 text-xs text-zinc-500">
+                Se você colar um link de pasta, o arquivo será enviado para ela (se a integração tiver permissão). Caso contrário, usa a pasta padrão configurada.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-4">
+              <input
+                type="file"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    await uploadDriveFile(file, { folderLink: driveUploadFolderLink || undefined });
+                    push('Arquivo enviado ✅', 'success');
+                    setDriveUploadOpen(false);
+                    // refresh list
+                    if (drivePath.length === 1) {
+                      openDriveRoot();
+                    } else {
+                      const last = drivePath[drivePath.length - 1];
+                      if (last?.id) openDriveFolder(last.id, last.name);
+                    }
+                  } catch (err: any) {
+                    push(parseApiError(err, 'Falha ao enviar arquivo'), 'error');
+                  } finally {
+                    (e.target as any).value = '';
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal mover arquivo no Drive */}
+      <Modal
+        open={driveMoveOpen}
+        title={driveMoveItem ? `Mover: ${driveMoveItem.name}` : 'Mover arquivo'}
+        onClose={() => {
+          setDriveMoveOpen(false);
+          setDriveMoveItem(null);
+        }}
+      >
+        {!driveEnabled ? (
+          <div className="text-sm text-zinc-600">
+            Mover arquivos não está habilitado no servidor. Configure a integração com o Google Drive (OAuth token) ou mova manualmente no Drive.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-zinc-600">Pasta destino (link/ID)</label>
+              <Input
+                value={driveMoveDest}
+                onChange={(e) => setDriveMoveDest(e.target.value)}
+                placeholder="Cole o link compartilhado da pasta destino"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDriveMoveOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={async () => {
+                  if (!driveMoveItem) return;
+                  try {
+                    await moveDriveFile(driveMoveItem.id, driveMoveDest);
+                    push('Arquivo movido ✅', 'success');
+                    setDriveMoveOpen(false);
+                    setDriveMoveItem(null);
+                    // refresh current folder
+                    if (drivePath.length === 1) {
+                      openDriveRoot();
+                    } else {
+                      const last = drivePath[drivePath.length - 1];
+                      if (last?.id) openDriveFolder(last.id, last.name);
+                    }
+                  } catch (err: any) {
+                    push(parseApiError(err, 'Falha ao mover arquivo'), 'error');
+                  }
+                }}
+              >
+                Mover
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Modal detalhes da demanda (Kanban) */}

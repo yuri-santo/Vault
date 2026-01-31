@@ -33,6 +33,9 @@ type KanbanCard = {
 
 type ProjectDoc = {
   ownerUid: string;
+  ownerEmail?: string | null;
+  sharedWith?: string[] | null;
+  shareLog?: Array<{ at: string; byUid: string; byEmail?: string | null; toUid: string; toEmail?: string | null }> | null;
   projectType?: 'sap' | 'general';
   name: string;
   description?: string | null;
@@ -96,13 +99,26 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
   const auth = requireSession(opts.fbAuth as any);
   const col = opts.fbDb.collection('projects');
 
-  // List projects
+  // List projects (owned + shared)
   r.get('/', auth, async (req: AuthedRequest, res) => {
     const uid = req.user!.uid;
-    const snap = await col.where('ownerUid', '==', uid).get();
-    const projects = snap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as any) }))
+
+    const [ownedSnap, sharedSnap] = await Promise.all([
+      col.where('ownerUid', '==', uid).get(),
+      col.where('sharedWith', 'array-contains', uid).get(),
+    ]);
+
+    const seen = new Set<string>();
+    const projects = ([] as any[])
+      .concat(ownedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any), _access: 'owner' })))
+      .concat(sharedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any), _access: 'shared' })))
+      .filter((p: any) => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      })
       .sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+
     return res.json({ projects });
   });
 
@@ -117,6 +133,9 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
 
     const payload: ProjectDoc = {
       ownerUid: uid,
+      ownerEmail: req.user?.email ?? null,
+      sharedWith: [],
+      shareLog: [],
       projectType,
       name,
       description: description || null,
@@ -275,6 +294,120 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     });
 
     return res.json({ ok: true });
+  });
+
+
+  // Share project with other users (by uid and/or email)
+  r.post('/:id/share', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
+    const uid = req.user!.uid;
+    const id = req.params.id;
+    const ref = col.doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Not found' });
+    const data = snap.data() as any;
+    if ((data?.ownerUid ?? null) !== uid) return res.status(403).json({ error: 'Forbidden' });
+
+    const uids: string[] = Array.isArray(req.body?.uids) ? req.body.uids.filter((x: any) => typeof x === 'string') : [];
+    const emails: string[] = Array.isArray(req.body?.emails) ? req.body.emails.filter((x: any) => typeof x === 'string') : [];
+
+    const resolved: Array<{ uid: string; email?: string | null }> = [];
+    for (const u of uids) {
+      const clean = String(u).trim();
+      if (clean) resolved.push({ uid: clean });
+    }
+    for (const e of emails) {
+      const email = String(e).trim().toLowerCase();
+      if (!email) continue;
+      try {
+        const u = await opts.fbAuth.getUserByEmail(email);
+        resolved.push({ uid: u.uid, email: u.email ?? email });
+      } catch {
+        return res.status(400).json({ error: `Usuário não encontrado para o e-mail: ${email}` });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const existing = Array.isArray(data?.sharedWith) ? data.sharedWith.filter((x: any) => typeof x === 'string') : [];
+    const merged = Array.from(new Set(existing.concat(resolved.map((x) => x.uid)).filter((x) => x && x !== uid)));
+
+    const log = Array.isArray(data?.shareLog) ? data.shareLog : [];
+    const addedLogs = resolved.map((x) => ({
+      at: now,
+      byUid: uid,
+      byEmail: req.user?.email ?? null,
+      toUid: x.uid,
+      toEmail: x.email ?? null,
+    }));
+
+    await ref.set({ sharedWith: merged, shareLog: log.concat(addedLogs).slice(-300), updatedAt: now }, { merge: true });
+
+    await auditFirestore(opts.fbDb, opts.logger, {
+      action: 'project_share',
+      uid,
+      email: req.user?.email,
+      ip: getIp(req),
+      userAgent: (req as any).headers['user-agent'],
+      details: { id, sharedWith: merged.length },
+    });
+
+    return res.json({ ok: true, sharedWith: merged });
+  });
+
+  // Stickies (post-its) for analog reminders
+  r.get('/:id/stickies', auth, async (req: AuthedRequest, res) => {
+    const uid = req.user!.uid;
+    const id = req.params.id;
+    const ref = col.doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Not found' });
+    const data = snap.data() as any;
+    if ((data?.ownerUid ?? null) !== uid && !(Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const stickies = Array.isArray(data?.stickies) ? data.stickies : [];
+    return res.json({ stickies });
+  });
+
+  r.put('/:id/stickies', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
+    const uid = req.user!.uid;
+    const id = req.params.id;
+    const ref = col.doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Not found' });
+    const data = snap.data() as any;
+    if ((data?.ownerUid ?? null) !== uid && !(Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const incoming = Array.isArray(req.body?.stickies) ? req.body.stickies : [];
+    const now = new Date().toISOString();
+    const stickies = incoming
+      .filter((s: any) => s && typeof s.id === 'string' && typeof s.text === 'string')
+      .map((s: any) => ({
+        id: String(s.id).slice(0, 64),
+        text: String(s.text).slice(0, 2000),
+        color: (['yellow','pink','blue','green','purple'].includes(String(s.color)) ? String(s.color) : 'yellow'),
+        x: Number.isFinite(Number(s.x)) ? Math.max(0, Math.min(Number(s.x), 2000)) : 0,
+        y: Number.isFinite(Number(s.y)) ? Math.max(0, Math.min(Number(s.y), 2000)) : 0,
+        rotation: Number.isFinite(Number(s.rotation)) ? Math.max(-8, Math.min(Number(s.rotation), 8)) : 0,
+        updatedAt: now,
+        createdAt: typeof s.createdAt === 'string' ? s.createdAt : now,
+        createdBy: typeof s.createdBy === 'string' ? s.createdBy : uid,
+      }))
+      .slice(0, 100);
+
+    await ref.set({ stickies, updatedAt: now }, { merge: true });
+
+    await auditFirestore(opts.fbDb, opts.logger, {
+      action: 'project_stickies_update',
+      uid,
+      email: req.user?.email,
+      ip: getIp(req),
+      userAgent: (req as any).headers['user-agent'],
+      details: { id, count: stickies.length },
+    });
+
+    return res.json({ ok: true, stickies });
   });
 
   return r;
