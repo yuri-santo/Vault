@@ -2428,7 +2428,7 @@ export default function Dashboard({
             </div>
           )}
 
-<div className="sm:col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-xs font-medium text-zinc-600">Notas</label>
             <Textarea
               value={form.notes}
@@ -2445,6 +2445,7 @@ export default function Dashboard({
           </Button>
           <Button onClick={saveEntry}>{editing ? 'Salvar alterações' : 'Criar senha'}</Button>
         </div>
+      </Modal>
 
       {/* Modal view details */}
       <Modal
