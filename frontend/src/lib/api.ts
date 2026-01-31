@@ -94,6 +94,7 @@ export type VaultEntry = {
   canEdit?: boolean;
   isShared?: boolean;
   sharedWith?: string[];
+  entryType?: string | null;
   name: string;
   url?: string | null;
   ip?: string | null;
@@ -128,8 +129,8 @@ export async function updateEntry(
   await api.put(`/vault/${id}`, payload);
 }
 
-export async function updateEntryShare(id: string, uids: string[]) {
-  await api.put(`/vault/${id}/share`, { uids });
+export async function updateEntryShare(id: string, payload: { uids: string[]; emails?: string[] }) {
+  await api.put(`/vault/${id}/share`, payload);
 }
 
 export async function deleteEntry(id: string) {
@@ -271,6 +272,7 @@ export type Project = {
   createdAt: string;
   updatedAt: string;
   driveFolderOverrideId?: string | null;
+  hourlyRate?: number | null;
 };
 
 export type KanbanColumn = { id: string; title: string };
@@ -297,10 +299,16 @@ export async function listProjects() {
   return data as { projects: Project[] };
 }
 
-export async function createProject(name: string, description?: string, projectType: 'sap' | 'general' = 'sap') {
-  const { data } = await api.post('/projects', { name, description, projectType });
-  return data as { ok: boolean; id: string };
+export async function createProject(
+  name: string,
+  description?: string | null,
+  projectType: 'sap' | 'general' = 'sap',
+  hourlyRate?: number | null
+) {
+  const { data } = await api.post('/projects', { name, description, projectType, hourlyRate });
+  return data as { ok: boolean; id: string; project?: Project };
 }
+
 
 export async function updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'description' | 'driveFolderOverrideId'>>) {
   const { data } = await api.put(`/projects/${id}`, patch);

@@ -43,6 +43,7 @@ type ProjectDoc = {
     cards: KanbanCard[];
   };
   driveFolderOverrideId?: string | null;
+  hourlyRate?: number | null;
 };
 
 function getIp(req: any) {
@@ -60,7 +61,9 @@ function defaultBoard(nowIso: string, projectType: 'sap' | 'general') {
         { id: 'analysis', title: 'Análise' },
         { id: 'dev', title: 'Dev' },
         { id: 'qa', title: 'QA' },
-        { id: 'prod', title: 'Produção' },
+        { id: 'ready_prod', title: 'Pronto p/ Produção' },
+        { id: 'in_prod', title: 'Em Produção' },
+        { id: 'done_prod', title: 'Finalizado em Produção' },
         { id: 'approved', title: 'Demandas Aprovadas' },
       ]
     : [

@@ -19,6 +19,7 @@ type VaultEntry = {
   ownerUid?: string;
   ownerEmail?: string;
   sharedWith?: string[];
+  entryType?: string | null;
   name: string;
   url?: string | null;
   ip?: string | null;
@@ -122,6 +123,7 @@ export function vaultRouter(opts: VaultRouterOpts) {
         canEdit,
         isShared: ownerUid !== uid,
         sharedWith: Array.isArray(data.sharedWith) ? data.sharedWith : [],
+        entryType: data.entryType ?? null,
         name: data.name,
         url,
         ip,
@@ -167,6 +169,7 @@ export function vaultRouter(opts: VaultRouterOpts) {
       ownerUid: req.user!.uid,
       ownerEmail: req.user!.email ?? null,
       sharedWith: [],
+      entryType: typeof body.entryType === 'string' ? body.entryType.slice(0, 32) : 'generic',
       name: body.name,
       url: maybeEncrypt(body.url),
       ip: maybeEncrypt(body.ip),
@@ -210,6 +213,7 @@ export function vaultRouter(opts: VaultRouterOpts) {
     const patch: any = { updatedAt: now };
 
     if (body.name !== undefined) patch.name = body.name;
+    if (body.entryType !== undefined) patch.entryType = typeof body.entryType === 'string' ? body.entryType.slice(0, 32) : null;
     if (body.url !== undefined) patch.url = maybeEncrypt(body.url);
     if (body.ip !== undefined) patch.ip = maybeEncrypt(body.ip);
     if (body.username !== undefined) patch.username = maybeEncrypt(body.username);
@@ -234,12 +238,22 @@ export function vaultRouter(opts: VaultRouterOpts) {
     res.json({ ok: true });
   });
 
-  // Compartilhar / atualizar lista de uids com acesso
+  // Compartilhar / atualizar lista de usuários com acesso
+  // Aceita: { uids: string[], emails?: string[] }
   r.put('/:id/share', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
     const id = req.params.id;
-    const uids = (req.body?.uids ?? []) as unknown;
-    if (!Array.isArray(uids) || !uids.every((x) => typeof x === 'string')) {
+
+    const uidsRaw = req.body?.uids ?? [];
+    const emailsRaw = req.body?.emails ?? [];
+
+    const uids = Array.isArray(uidsRaw) ? uidsRaw : [];
+    const emails = Array.isArray(emailsRaw) ? emailsRaw : [];
+
+    if (!uids.every((x) => typeof x === 'string')) {
       return res.status(400).json({ error: 'uids must be string[]' });
+    }
+    if (!emails.every((x) => typeof x === 'string')) {
+      return res.status(400).json({ error: 'emails must be string[]' });
     }
 
     const current = await col.doc(id).get();
@@ -248,7 +262,41 @@ export function vaultRouter(opts: VaultRouterOpts) {
     const ownerUid = data.ownerUid ?? req.user!.uid;
     if (ownerUid !== req.user!.uid) return res.status(403).json({ error: 'Forbidden' });
 
-    await col.doc(id).set({ sharedWith: uids, updatedAt: new Date().toISOString() }, { merge: true });
+    // Resolve emails -> uids (best-effort, but report invalids)
+    const resolved: string[] = [];
+    const invalidEmails: string[] = [];
+
+    for (const e of emails) {
+      const email = String(e).trim();
+      if (!email) continue;
+      if (!email.includes('@')) {
+        invalidEmails.push(email);
+        continue;
+      }
+      try {
+        const u = await opts.fbAuth.getUserByEmail(email);
+        if (u?.uid) resolved.push(u.uid);
+      } catch {
+        invalidEmails.push(email);
+      }
+    }
+
+    if (invalidEmails.length) {
+      return res.status(400).json({
+        error: 'Alguns e-mails não foram encontrados/validados.',
+        invalidEmails,
+      });
+    }
+
+    // Normalize unique uids (never include owner twice; allow sharing back to self is meaningless so skip)
+    const uniq = new Set<string>();
+    uids.map((x) => x.trim()).filter(Boolean).forEach((x) => uniq.add(x));
+    resolved.forEach((x) => uniq.add(x));
+    uniq.delete(req.user!.uid);
+
+    const finalUids = Array.from(uniq.values());
+
+    await col.doc(id).set({ sharedWith: finalUids, updatedAt: new Date().toISOString() }, { merge: true });
 
     await auditFirestore(opts.fbDb, opts.logger, {
       action: 'vault_share_update',
@@ -256,10 +304,10 @@ export function vaultRouter(opts: VaultRouterOpts) {
       email: req.user?.email,
       ip: getIp(req as any),
       userAgent: (req as any).headers['user-agent'],
-      details: { id, uids }
+      details: { id, uids: finalUids }
     });
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, uids: finalUids });
   });
 
   // DELETE

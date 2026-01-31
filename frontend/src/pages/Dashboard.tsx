@@ -40,7 +40,7 @@ import {
 import { Modal } from '../components/modal';
 import { useToast } from '../components/toast';
 
-function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive' | 'projects' | 'folder' | 'file' | 'note' | 'search' | 'filter' | 'dots' | 'copy' | 'eye' | 'edit' | 'trash' | 'plus'; className?: string }) {
+function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive' | 'projects' | 'folder' | 'file' | 'note' | 'search' | 'filter' | 'dots' | 'copy' | 'eye' | 'edit' | 'trash' | 'plus' | 'externalLink'; className?: string }) {
   const common = cn('inline-block', className);
   // Tiny inline icons (no deps)
   switch (name) {
@@ -117,6 +117,14 @@ function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive'
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 6.6a1.2 1.2 0 1 0 0 .01V6.6zM12 12a1.2 1.2 0 1 0 0 .01V12zM12 17.4a1.2 1.2 0 1 0 0 .01v-.01z" stroke="currentColor" strokeWidth="1.7" />
+        </svg>
+      );
+    case 'externalLink':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M14 5h5v5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M10 14L19 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case 'copy':
@@ -472,6 +480,7 @@ export default function Dashboard({
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VaultEntry | null>(null);
   const [form, setForm] = useState({
+    entryType: 'generic',
     name: '',
     url: '',
     username: '',
@@ -544,6 +553,7 @@ export default function Dashboard({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareEntry, setShareEntry] = useState<VaultEntry | null>(null);
   const [shareSelectedUids, setShareSelectedUids] = useState<Record<string, boolean>>({});
+  const [shareExtraEmails, setShareExtraEmails] = useState('');
 
   // Drive
   const [driveFolder, setDriveFolderState] = useState('');
@@ -562,9 +572,28 @@ export default function Dashboard({
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projectBoard, setProjectBoard] = useState<ProjectBoard | null>(null);
+  const [projectBoardLoading, setProjectBoardLoading] = useState(false);
+  const [cardModalOpen, setCardModalOpen] = useState(false);
+  const [activeCard, setActiveCard] = useState<KanbanCard | null>(null);
+  const [cardEdit, setCardEdit] = useState({
+    title: '',
+    description: '',
+    type: 'task',
+    estimateHours: '',
+    qaNotes: '',
+    prodNotes: '',
+    tags: '',
+    approved: false,
+    columnId: '',
+  });
+  const [newCardComment, setNewCardComment] = useState('');
+  const [newCardEmailSubject, setNewCardEmailSubject] = useState('');
+  const [newCardEmailBody, setNewCardEmailBody] = useState('');
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [newProjectType, setNewProjectType] = useState<'sap' | 'general'>('sap');
+  const [newProjectHourlyRate, setNewProjectHourlyRate] = useState('');
   const [newCardTitle, setNewCardTitle] = useState('');
   const [newCardDesc, setNewCardDesc] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
@@ -626,15 +655,44 @@ export default function Dashboard({
       setProjectBoard(null);
       return;
     }
+    setProjectBoardLoading(true);
     getProjectBoard(activeProjectId)
-      .then((res) => {
-        setProjectBoard(res.board);
-        const firstCol = res.board.columns?.[0]?.id;
+      .then(async (res) => {
+        // Auto-upgrade SAP boards to include missing columns requested (QA/Prod/Aprovadas)
+        let board = res.board;
+        const p = projects.find((x) => x.id === activeProjectId);
+        const type = (p?.projectType ?? 'sap') as any;
+
+        if (type === 'sap') {
+          const required = [
+            { id: 'backlog', title: 'Backlog' },
+            { id: 'analysis', title: 'Análise' },
+            { id: 'dev', title: 'Dev' },
+            { id: 'qa', title: 'QA' },
+            { id: 'ready_prod', title: 'Pronto p/ Produção' },
+            { id: 'in_prod', title: 'Em Produção' },
+            { id: 'done_prod', title: 'Finalizado em Produção' },
+            { id: 'approved', title: 'Demandas Aprovadas' },
+          ];
+          const existingIds = new Set(board.columns.map((c) => c.id));
+          const missing = required.filter((c) => !existingIds.has(c.id));
+          if (missing.length) {
+            // Map old prod column if present
+            const mappedCols = board.columns.map((c) => (c.id === 'prod' ? { ...c, id: 'in_prod', title: 'Em Produção' } : c));
+            const mappedCards = board.cards.map((card) => (card.columnId === 'prod' ? { ...card, columnId: 'in_prod' } : card));
+            board = { ...board, columns: [...mappedCols, ...missing], cards: mappedCards };
+            await saveProjectBoard(activeProjectId, board).catch(() => null);
+          }
+        }
+
+        setProjectBoard(board);
+        const firstCol = board.columns?.[0]?.id;
         if (firstCol && !newCardColumnId) setNewCardColumnId(firstCol);
       })
       .catch(() => {
         setProjectBoard(null);
-      });
+      })
+      .finally(() => setProjectBoardLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
 
@@ -675,6 +733,7 @@ export default function Dashboard({
   function openNew() {
     setEditing(null);
     setForm({
+      entryType: 'generic',
       name: '',
       url: '',
       username: '',
@@ -701,6 +760,7 @@ export default function Dashboard({
     setVpnConn({ ...emptyVpn, ...(vpn && typeof vpn === 'object' ? vpn : {}) });
     setMetaJsonText(meta && typeof meta === 'object' ? JSON.stringify(meta, null, 2) : (e.connectionData ?? ''));
     setForm({
+      entryType: (e as any).entryType ?? (sap ? 'sap' : vpn ? 'vpn' : (meta ? 'json' : 'generic')),
       name: e.name ?? '',
       url: (e as any).url ?? '',
       username: e.username ?? '',
@@ -724,6 +784,7 @@ export default function Dashboard({
     const preset: Record<string, boolean> = {};
     (e.sharedWith ?? []).forEach((uid) => (preset[uid] = true));
     setShareSelectedUids(preset);
+    setShareExtraEmails('');
     setShareModalOpen(true);
   }
 
@@ -751,6 +812,7 @@ export default function Dashboard({
     try {
       if (editing) {
         await updateEntry(editing.id, {
+          entryType: (form as any).entryType,
           name: form.name,
           url: form.url || null,
           username: form.username || null,
@@ -765,6 +827,7 @@ export default function Dashboard({
         push('Senha atualizada ✅', 'success');
       } else {
         await createEntry({
+          entryType: (form as any).entryType,
           name: form.name,
           url: form.url || null,
           username: form.username || null,
@@ -898,14 +961,23 @@ export default function Dashboard({
     const name = newProjectName.trim();
     if (!name) return push('Informe o nome do projeto', 'error');
     try {
-      const r = await createProject({ name, description: null });
+      const rate = parseFloat(String(newProjectHourlyRate).replace(',', '.'));
+      await createProject(name, newProjectDesc.trim() || null, newProjectType, isFinite(rate) ? rate : null);
+
       setNewProjectName('');
+      setNewProjectDesc('');
+      setNewProjectHourlyRate('');
       push('Projeto criado ✅', 'success');
-      const ps = [...projects, r.project];
-      setProjects(ps);
-      setActiveProjectId(r.project.id);
-    } catch {
-      push('Falha ao criar projeto', 'error');
+
+      // Recarrega lista e seleciona o recém-criado
+      const projs = await listProjects().catch(() => ({ projects: [] } as any));
+      const pList = (projs as any).projects ?? [];
+      setProjects(pList);
+      const newest = pList[0] || null;
+      if (newest) setActiveProjectId(newest.id);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Falha ao criar projeto';
+      push(msg, 'error');
     }
   }
 
@@ -944,11 +1016,11 @@ export default function Dashboard({
       ...projectBoard,
       cards: [
         ...projectBoard.cards,
-        { id, columnId, title, description: newCardDescription || null, createdAt: now, updatedAt: now },
+        { id, columnId, title, description: newCardDesc.trim() || null, createdAt: now, updatedAt: now },
       ],
     };
     setNewCardTitle('');
-    setNewCardDescription('');
+    setNewCardDesc('');
     await saveBoard(next);
   }
 
@@ -965,6 +1037,104 @@ export default function Dashboard({
   async function deleteKanbanCard(cardId: string) {
     if (!projectBoard) return;
     const next: ProjectBoard = { ...projectBoard, cards: projectBoard.cards.filter((c) => c.id !== cardId) };
+    await saveBoard(next);
+  }
+
+  function openCard(card: KanbanCard) {
+    setActiveCard(card);
+    setCardEdit({
+      title: card.title ?? '',
+      description: (card.description ?? '') as any,
+      type: (card.type ?? 'task') as any,
+      estimateHours: card.estimateHours != null ? String(card.estimateHours) : '',
+      qaNotes: (card.qaNotes ?? '') as any,
+      prodNotes: (card.prodNotes ?? '') as any,
+      tags: Array.isArray(card.tags) ? card.tags.join(', ') : '',
+      approved: Boolean(card.approvedAt) || card.columnId === 'approved',
+      columnId: card.columnId,
+    });
+    setNewCardComment('');
+    setNewCardEmailSubject('');
+    setNewCardEmailBody('');
+    setCardModalOpen(true);
+  }
+
+  async function persistCardEdits(extraPatch?: Partial<KanbanCard>) {
+    if (!projectBoard || !activeProjectId || !activeCard) return;
+    const now = new Date().toISOString();
+    const est = parseFloat(String(cardEdit.estimateHours).replace(',', '.'));
+    const nextCard: KanbanCard = {
+      ...activeCard,
+      title: cardEdit.title.trim() || activeCard.title,
+      description: cardEdit.description?.trim() ? cardEdit.description.trim() : null,
+      type: cardEdit.type as any,
+      estimateHours: isFinite(est) ? est : null,
+      qaNotes: cardEdit.qaNotes?.trim() ? cardEdit.qaNotes.trim() : null,
+      prodNotes: cardEdit.prodNotes?.trim() ? cardEdit.prodNotes.trim() : null,
+      tags: cardEdit.tags
+        ? cardEdit.tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : null,
+      updatedAt: now,
+      ...(extraPatch || {}),
+    };
+
+    let columnId = cardEdit.columnId;
+    if (cardEdit.approved && projectBoard.columns.some((c) => c.id === 'approved')) {
+      columnId = 'approved';
+    }
+    nextCard.columnId = columnId;
+    if (cardEdit.approved && !nextCard.approvedAt) nextCard.approvedAt = now;
+
+    const next: ProjectBoard = {
+      ...projectBoard,
+      cards: projectBoard.cards.map((c) => (c.id === activeCard.id ? (nextCard as any) : c)),
+    };
+
+    setActiveCard(nextCard);
+    await saveBoard(next);
+    push('Card atualizado ✅', 'success');
+  }
+
+  async function addCardComment() {
+    if (!projectBoard || !activeProjectId || !activeCard) return;
+    const text = newCardComment.trim();
+    if (!text) return;
+    const now = new Date().toISOString();
+    const nextCard: KanbanCard = {
+      ...activeCard,
+      comments: [...(activeCard.comments ?? []), { at: now, text }],
+      updatedAt: now,
+    };
+    const next: ProjectBoard = {
+      ...projectBoard,
+      cards: projectBoard.cards.map((c) => (c.id === activeCard.id ? nextCard : c)),
+    };
+    setActiveCard(nextCard);
+    setNewCardComment('');
+    await saveBoard(next);
+  }
+
+  async function addCardEmail() {
+    if (!projectBoard || !activeProjectId || !activeCard) return;
+    const subj = newCardEmailSubject.trim();
+    const body = newCardEmailBody.trim();
+    if (!subj && !body) return;
+    const now = new Date().toISOString();
+    const nextCard: KanbanCard = {
+      ...activeCard,
+      emails: [...(activeCard.emails ?? []), { at: now, subject: subj || '(sem assunto)', body }],
+      updatedAt: now,
+    };
+    const next: ProjectBoard = {
+      ...projectBoard,
+      cards: projectBoard.cards.map((c) => (c.id === activeCard.id ? nextCard : c)),
+    };
+    setActiveCard(nextCard);
+    setNewCardEmailSubject('');
+    setNewCardEmailBody('');
     await saveBoard(next);
   }
 
@@ -1249,6 +1419,18 @@ export default function Dashboard({
                                   <div className="text-xs text-zinc-500 mt-1 break-all">
                                     {e.isShared ? `Compartilhado por ${e.ownerEmail || '—'}` : (e.email || e.ip || e.ownerEmail || '—')}
                                   </div>
+                                  {e.url ? (
+                                    <a
+                                      href={(e.url.startsWith('http') ? e.url : `https://${e.url}`) as any}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="mt-1 inline-flex items-center gap-1 text-xs text-violet-700 hover:underline break-all"
+                                      title="Abrir URL"
+                                    >
+                                      <Icon name="externalLink" className="h-3.5 w-3.5" />
+                                      <span>{e.url}</span>
+                                    </a>
+                                  ) : null}
                                 </div>
                                 <EntryInlineActions
                                   entry={e}
@@ -1293,6 +1475,18 @@ export default function Dashboard({
                                 <div className="text-xs text-zinc-500 mt-1 truncate">
                                   {e.isShared ? `Compartilhado por ${e.ownerEmail || '—'}` : (e.ownerEmail || '—')}
                                 </div>
+                                {e.url ? (
+                                  <a
+                                    href={(e.url.startsWith('http') ? e.url : `https://${e.url}`) as any}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-1 inline-flex items-center gap-1 text-xs text-violet-700 hover:underline truncate"
+                                    title="Abrir URL"
+                                  >
+                                    <Icon name="externalLink" className="h-3.5 w-3.5" />
+                                    <span className="truncate">{e.url}</span>
+                                  </a>
+                                ) : null}
                               </div>
 
                               <div className="text-sm text-zinc-800 break-all">{e.username || '—'}</div>
@@ -1606,9 +1800,31 @@ export default function Dashboard({
                 <div className="mt-4 grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
                   <div className="rounded-3xl border border-zinc-200/70 bg-white p-4">
                     <div className="text-xs font-semibold text-zinc-600">Seus projetos</div>
-                    <div className="mt-3 flex gap-2">
-                      <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nome do projeto" />
-                      <Button onClick={createNewProject}>Criar</Button>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex gap-2">
+                        <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nome do projeto" />
+                        <Button onClick={createNewProject}>Criar</Button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="sm:col-span-2">
+                          <select
+                            value={newProjectType}
+                            onChange={(e) => setNewProjectType(e.target.value as any)}
+                            className="w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+                            title="Tipo do projeto"
+                          >
+                            <option value="sap">Projeto SAP</option>
+                            <option value="general">Projeto Geral</option>
+                          </select>
+                        </div>
+                        <Input
+                          value={newProjectHourlyRate}
+                          onChange={(e) => setNewProjectHourlyRate(e.target.value)}
+                          placeholder="R$/hora (opcional)"
+                          title="Valor hora"
+                        />
+                      </div>
+                      <Textarea value={newProjectDesc} onChange={(e) => setNewProjectDesc(e.target.value)} rows={2} placeholder="Descrição (opcional)" />
                     </div>
 
                     <div className="mt-4 space-y-2">
@@ -1664,8 +1880,9 @@ export default function Dashboard({
                                         <div className="min-w-0">
                                           <div className="font-medium text-sm truncate">{c.title}</div>
                                           {c.description ? <div className="text-xs text-zinc-600 mt-1 whitespace-pre-wrap">{c.description}</div> : null}
+                                          {c.estimateHours != null ? <div className="mt-2 text-[11px] text-zinc-500">⏱ {c.estimateHours}h</div> : null}
                                         </div>
-                                        <button type="button" className="text-zinc-400 hover:text-red-600" onClick={() => deleteKanbanCard(c.id)} title="Excluir">
+                                        <button type="button" className="text-zinc-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); deleteKanbanCard(c.id); }} title="Excluir">
                                           <Icon name="trash" className="h-4 w-4" />
                                         </button>
                                       </div>
@@ -1673,7 +1890,7 @@ export default function Dashboard({
                                       <div className="mt-2 flex items-center justify-between gap-2">
                                         <select
                                           value={c.columnId}
-                                          onChange={(e) => moveKanbanCard(c.id, e.target.value)}
+                                          onChange={(e) => { e.stopPropagation(); moveKanbanCard(c.id, e.target.value); }}
                                           className="text-xs rounded-xl border border-zinc-200 bg-white px-2 py-1"
                                         >
                                           {projectBoard.columns.map((cc) => (
@@ -1685,7 +1902,7 @@ export default function Dashboard({
                                         <button
                                           type="button"
                                           className="text-xs text-violet-700 hover:text-violet-800 font-medium"
-                                          onClick={() => navigator.clipboard.writeText(c.title + (c.description ? `\n\n${c.description}` : '')).then(() => push('Card copiado', 'success'))}
+                                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(c.title + (c.description ? `\n\n${c.description}` : '')).then(() => push('Card copiado', 'success')); }}
                                         >
                                           Copiar
                                         </button>
@@ -1698,7 +1915,7 @@ export default function Dashboard({
                                 <div className="text-xs font-semibold text-zinc-600">Novo card</div>
                                 <div className="mt-2 space-y-2">
                                   <Input value={newCardTitle} onChange={(e) => setNewCardTitle(e.target.value)} placeholder="Título" />
-                                  <Textarea value={newCardDescription} onChange={(e) => setNewCardDescription(e.target.value)} rows={2} placeholder="Descrição (opcional)" />
+                                  <Textarea value={newCardDesc} onChange={(e) => setNewCardDesc(e.target.value)} rows={2} placeholder="Descrição (opcional)" />
                                   <Button variant="secondary" onClick={() => addKanbanCard(col.id)}>
                                     Adicionar
                                   </Button>
@@ -1826,10 +2043,28 @@ export default function Dashboard({
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-zinc-600">Tipo de credencial</label>
+            <select
+              value={(form as any).entryType}
+              onChange={(e) => setForm((p: any) => ({ ...p, entryType: e.target.value }))}
+              className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="generic">Genérica</option>
+              <option value="website">Site / Login Web</option>
+              <option value="sap">Conexão SAP</option>
+              <option value="vpn">Conexão VPN</option>
+              <option value="json">JSON / ENV / App</option>
+            </select>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              O formulário se adapta ao tipo escolhido para ficar mais clean.
+            </div>
+          </div>
+
+          <div className="sm:col-span-2">
             <label className="text-xs font-medium text-zinc-600">Serviço / Nome</label>
             <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ex.: AWS Console" />
           </div>
-
+          {(['generic','website'].includes((form as any).entryType)) && (
           <div className="sm:col-span-2">
             <label className="text-xs font-medium text-zinc-600">URL (opcional)</label>
             <div className="flex gap-2">
@@ -1844,8 +2079,9 @@ export default function Dashboard({
                 <Icon name="copy" className="h-4 w-4" />
               </Button>
             </div>
+          )}
           </div>
-
+          {((form as any).entryType !== 'json') && (
           <div>
             <label className="text-xs font-medium text-zinc-600">Usuário</label>
             <Input value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} placeholder="Ex.: root" />
@@ -1855,17 +2091,20 @@ export default function Dashboard({
             <label className="text-xs font-medium text-zinc-600">Senha</label>
             <Input value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" />
           </div>
-
+          )}
+          {((form as any).entryType === 'generic') && (
           <div>
             <label className="text-xs font-medium text-zinc-600">IP / Host</label>
             <Input value={form.ip} onChange={(e) => setForm((p) => ({ ...p, ip: e.target.value }))} placeholder="Ex.: 10.0.0.10" />
           </div>
-
+          )}
+          {((form as any).entryType === 'generic') && (
           <div>
             <label className="text-xs font-medium text-zinc-600">E-mail vinculado</label>
             <Input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} placeholder="Ex.: admin@empresa.com" />
           </div>
-
+          )}
+          {((form as any).entryType === 'sap') && (
           <div className="sm:col-span-2">
             <div className="flex items-center justify-between gap-3">
               <label className="text-xs font-medium text-zinc-600">Conexão SAP (campos)</label>
@@ -1946,7 +2185,8 @@ export default function Dashboard({
               </div>
             </div>
           </div>
-
+          )}
+          {((form as any).entryType === 'vpn') && (
           <div className="sm:col-span-2">
             <div className="flex items-center justify-between gap-3">
               <label className="text-xs font-medium text-zinc-600">Conexão VPN (campos)</label>
@@ -2011,6 +2251,9 @@ export default function Dashboard({
             </div>
           </div>
 
+          
+          )}
+          {((form as any).entryType !== 'website') && (
           <div className="sm:col-span-2">
             <div className="flex items-center justify-between gap-3">
               <label className="text-xs font-medium text-zinc-600">Dados gerais / JSON (env, configs, apps)</label>
@@ -2018,6 +2261,7 @@ export default function Dashboard({
                 <Icon name="copy" className="h-4 w-4" />
               </Button>
             </div>
+          )}
             <Textarea
               value={metaJsonText}
               onChange={(e) => setMetaJsonText(e.target.value)}
@@ -2161,33 +2405,45 @@ export default function Dashboard({
         </div>
 
         <div className="mt-4 space-y-2">
+          <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
+            <div className="font-medium text-zinc-800">Adicionar destinatários</div>
+            <div className="mt-1 text-xs text-zinc-500">
+              Você pode selecionar conexões aceitas abaixo <b>ou</b> colar e-mails diretamente (separados por vírgula, espaço ou linha).
+            </div>
+            <Textarea
+              value={shareExtraEmails}
+              onChange={(e) => setShareExtraEmails(e.target.value)}
+              rows={3}
+              placeholder="ex.: consultor@empresa.com, time@cliente.com"
+              className="mt-3 bg-white/90"
+            />
+          </div>
+
           {connections.length === 0 ? (
             <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
-              Você ainda não tem conexões aceitas. Vá em <b>Compartilhamento</b> e envie um convite para outro usuário.
+              Você ainda não tem conexões aceitas. Vá em <b>Compartilhamento</b> e envie um convite para outro usuário (isso facilita selecionar com 1 clique).
             </div>
           ) : (
-            connections
-              .filter((c) => c.status === 'accepted')
-              .map((c) => {
-                const checked = Boolean(shareSelectedUids[c.otherUid]);
-                return (
-                  <label key={c.id} className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-zinc-800 truncate">{c.otherEmail}</div>
-                      <div className="text-xs text-zinc-500 truncate">Conexão aceita</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        const v = e.target.checked;
-                        setShareSelectedUids((prev) => ({ ...prev, [c.otherUid]: v }));
-                      }}
-                      className="h-4 w-4 accent-violet-600"
-                    />
-                  </label>
-                );
-              })
+            connections.map((c) => {
+              const checked = Boolean(shareSelectedUids[c.uid]);
+              return (
+                <label key={c.uid} className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="font-medium text-zinc-800 truncate">{c.email ?? c.uid}</div>
+                    <div className="text-xs text-zinc-500 truncate">Conexão aceita</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setShareSelectedUids((prev) => ({ ...prev, [c.uid]: v }));
+                    }}
+                    className="h-4 w-4 accent-violet-600"
+                  />
+                </label>
+              );
+            })
           )}
         </div>
 
@@ -2202,19 +2458,214 @@ export default function Dashboard({
                 const uids = Object.entries(shareSelectedUids)
                   .filter(([, v]) => v)
                   .map(([uid]) => uid);
-                await updateEntryShare(shareEntry.id, uids);
+                const emails = shareExtraEmails
+                  .split(/[\s,;\n\r\t]+/g)
+                  .map((x) => x.trim())
+                  .filter(Boolean);
+                await updateEntryShare(shareEntry.id, { uids, emails });
                 push('Compartilhamento atualizado ✅', 'success');
                 setShareModalOpen(false);
                 setShareEntry(null);
                 await refreshAll();
-              } catch {
-                push('Falha ao compartilhar', 'error');
+              } catch (err: any) {
+                const invalid = err?.response?.data?.invalidEmails;
+                if (Array.isArray(invalid) && invalid.length) {
+                  push(`E-mails inválidos/não encontrados: ${invalid.join(', ')}`, 'error');
+                } else {
+                  const msg = err?.response?.data?.error || 'Falha ao compartilhar';
+                  push(msg, 'error');
+                }
               }
             }}
           >
             Salvar compartilhamento
           </Button>
         </div>
+
+      </Modal>
+
+      {/* Modal detalhes da demanda (Kanban) */}
+      <Modal open={cardModalOpen} onClose={() => setCardModalOpen(false)} title="Detalhes da demanda">
+        {!activeCard || !projectBoard ? (
+          <div className="text-sm text-zinc-600">Selecione uma demanda.</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-zinc-600">Título</label>
+                <Input
+                  value={cardEdit.title}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, title: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-zinc-600">Descrição</label>
+                <Textarea
+                  value={cardEdit.description}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, description: e.target.value }))}
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Tipo</label>
+                <select
+                  value={cardEdit.type}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, type: e.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="task">Task</option>
+                  <option value="bug">Bug</option>
+                  <option value="story">Story</option>
+                  <option value="research">Research</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Estimativa (h)</label>
+                <Input
+                  value={cardEdit.estimateHours}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, estimateHours: e.target.value }))}
+                  placeholder="ex.: 3.5"
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-zinc-600">Tags (separadas por vírgula)</label>
+                <Input
+                  value={cardEdit.tags}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, tags: e.target.value }))}
+                  placeholder="ex.: FI, NF-e, UI"
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-zinc-600">Coluna</label>
+                <select
+                  value={cardEdit.columnId}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, columnId: e.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+                >
+                  {projectBoard.columns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={cardEdit.approved}
+                    onChange={(e) => setCardEdit((p: any) => ({ ...p, approved: e.target.checked }))}
+                    className="h-4 w-4 accent-violet-600"
+                  />
+                  Demanda aprovada
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Notas de QA</label>
+                <Textarea
+                  value={cardEdit.qaNotes}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, qaNotes: e.target.value }))}
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Notas de Produção</label>
+                <Textarea
+                  value={cardEdit.prodNotes}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, prodNotes: e.target.value }))}
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200/70 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-zinc-800">Comentários</div>
+                <div className="text-xs text-zinc-500">{(activeCard.comments?.length ?? 0)} itens</div>
+              </div>
+
+              <div className="mt-2 space-y-2 max-h-40 overflow-auto pr-1">
+                {(activeCard.comments ?? []).length ? (
+                  (activeCard.comments ?? []).map((cmt, idx) => (
+                    <div key={idx} className="rounded-xl border border-zinc-200/70 bg-white px-3 py-2">
+                      <div className="text-xs text-zinc-500">{new Date(cmt.at).toLocaleString()}</div>
+                      <div className="text-sm text-zinc-800 whitespace-pre-wrap">{cmt.text}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-zinc-500">Sem comentários ainda.</div>
+                )}
+              </div>
+
+              <div className="mt-3">
+                <Textarea
+                  value={newCardComment}
+                  onChange={(e) => setNewCardComment(e.target.value)}
+                  rows={2}
+                  placeholder="Adicionar comentário..."
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button variant="secondary" onClick={addCommentToCard}>
+                    Adicionar comentário
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200/70 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-zinc-800">E-mails</div>
+                <div className="text-xs text-zinc-500">{(activeCard.emails?.length ?? 0)} itens</div>
+              </div>
+
+              <div className="mt-2 space-y-2 max-h-40 overflow-auto pr-1">
+                {(activeCard.emails ?? []).length ? (
+                  (activeCard.emails ?? []).map((em, idx) => (
+                    <div key={idx} className="rounded-xl border border-zinc-200/70 bg-white px-3 py-2">
+                      <div className="text-xs text-zinc-500">{new Date(em.at).toLocaleString()}</div>
+                      <div className="text-sm text-zinc-800 font-medium whitespace-pre-wrap">{em.subject}</div>
+                      <div className="text-sm text-zinc-700 whitespace-pre-wrap mt-1">{em.body}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-zinc-500">Nenhum e-mail registrado.</div>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <Input value={newCardEmailSubject} onChange={(e) => setNewCardEmailSubject(e.target.value)} placeholder="Assunto do e-mail" />
+                <Textarea value={newCardEmailBody} onChange={(e) => setNewCardEmailBody(e.target.value)} rows={3} placeholder="Conteúdo do e-mail..." />
+                <div className="flex justify-end">
+                  <Button variant="secondary" onClick={addEmailToCard}>
+                    Registrar e-mail
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="secondary" onClick={() => setCardModalOpen(false)}>
+                Fechar
+              </Button>
+              <Button onClick={saveCardEdits}>Salvar alterações</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
