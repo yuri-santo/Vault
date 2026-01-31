@@ -1,22 +1,58 @@
-# Password Vault Pro — Cofre de Senhas (Full Stack) com Firebase + Render
+# Vault — Cofre de Senhas + Projetos (Kanban) + Drive Explorer
 
-Aplicação web **full stack em TypeScript** para uso interno como “cofre de senhas” compartilhado, com foco em **segurança**, **simplicidade operacional** e **UX de dashboard**.
+**Vault** é um sistema web **full stack em TypeScript** pensado para uso interno por empresas, consultorias e squads técnicos. A proposta é simples: **centralizar credenciais**, **padronizar conexões técnicas** (SAP/VPN/URLs) e dar um **painel de trabalho** para o time (projetos, dúvidas, tarefas), com segurança de ponta a ponta.
 
-> Objetivo: centralizar credenciais técnicas (IPs, usuários, senhas, e-mails, dados de conexão e observações) com armazenamento criptografado, auditoria de acessos e autenticação robusta.
+**O que você ganha como negócio:** menos perda de tempo procurando acesso, menos risco de “senha perdida em WhatsApp”, onboarding mais rápido e um fluxo de trabalho organizado para operar ambientes e projetos.
+
+---
+
+## O que é o Vault (visão de negócio)
+
+Imagine um time que vive de ambientes, acessos e prazos: SAP, VPN, servidores, APIs, contas cloud, links de documentação e dezenas de demandas rodando ao mesmo tempo.
+
+**Vault** é o “cockpit” desse cenário: um sistema interno para **guardar, padronizar, compartilhar e operar** credenciais e conexões técnicas, com um **painel de projetos** para conduzir entregas (estilo Jira/Kanban) e um **explorador de Drive** para anexos e referências.
+
+O resultado é simples de medir:
+- menos tempo perdido procurando acesso e parâmetros
+- menos risco e retrabalho (“senha no WhatsApp” / “qual era o SAProuter?”)
+- onboarding mais rápido
+- mais previsibilidade nas entregas (Kanban + estimativa)
 
 ---
 
 ## Principais funcionalidades
 
-- **Autenticação** com **Firebase Auth (E-mail/Senha)**
-- **Sessão segura no backend** com **Firebase Session Cookie (HttpOnly)**
-- **Proteção CSRF** (requisições que alteram dados exigem token)
-- **Criptografia AES-256-GCM** para dados sensíveis:
-  - **salt + IV únicos por campo**
-  - integridade garantida (GCM Authentication Tag)
-- **Dashboard moderno** (React + Vite + Tailwind) com CRUD completo
-- **Auditoria** em **Firestore** (coleção de logs) + logs do servidor (arquivo rotativo)
-- **Hardening** de API: Helmet, rate limiting, CORS restrito, validações e `.env` para segredos
+- **Cofre criptografado** para credenciais técnicas (AES-256-GCM por campo)
+- **Campos prontos para operação**: URL/Endpoint (clicável), IP/Host, usuário, senha, e-mail e notas
+- **Conexões estruturadas** (sem “texto solto”): cada dado em seu campo
+  - **SAP**: Application Server, Instance Number, System ID (SID), Client, Language, SAProuter, Message Server, Logon Group, SNC Name
+  - **VPN**: Provedor, Server/Host, Porta, Protocolo, Usuário, Domínio/Realm, Perfil, Observações
+  - **JSON livre**: guarde informações de `.env`, parâmetros de apps, chaves e configurações como objeto JSON
+  - **Copiar com 1 clique** em qualquer campo (usuário, senha, router, host, etc.)
+- **Compartilhamento real de senhas** (por entrada)
+  - convites e conexões entre usuários (aceite/recusa)
+  - botão **Compartilhar** dentro da senha para escolher destinatários
+  - no painel do destinatário a senha aparece como **"Compartilhado por <dono>"** e os campos ficam disponíveis para copiar
+- **Busca avançada (estilo SAP)**
+  - filtro por letra (A–Z)
+  - filtros por escopo (minhas vs compartilhadas), dono, presença de SAP/VPN, etc.
+- **Projetos + Kanban (estilo Jira)**
+  - criar projetos e manter um board com colunas e cartões
+  - mover cartões entre colunas e persistir tudo por usuário
+  - tipos de projeto: **SAP** (colunas Dev/QA/Produção/Aprovadas) e **Geral** (Review/Done/Aprovadas)
+  - campos em cartão: **estimativa de horas**, tags, comentários e área para colar e-mails/briefings
+- **Drive Explorer (estilo Finder/Mac)**
+  - salvar um link público de pasta do Google Drive por usuário (pode trocar quando quiser)
+  - navegar por pastas/arquivos e copiar link com 1 clique
+  - lista “Arquivos do Vault” para anexos do cofre (com remoção/ocultação)
+- **Upload opcional para Drive (com fallback)**
+  - se você configurar um token OAuth, o Vault consegue enviar arquivos para uma pasta
+  - se não estiver configurado, o sistema exibe uma mensagem clara explicando o motivo e como habilitar
+- **Notas**
+  - rascunho rápido (bloco único)
+  - **notas em cards** com título + data, buscáveis por conteúdo e nome
+- **Auditoria** em Firestore (eventos) + logs do servidor
+- **Hardening de API**: CSRF, Helmet, rate limiting, CORS restrito, validações e `.env` para segredos
 
 ---
 

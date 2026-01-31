@@ -15,6 +15,7 @@ import { vaultRouter } from './routes/vault';
 import { sharingRouter } from './routes/sharing';
 import { notesRouter } from './routes/notes';
 import { driveRouter } from './routes/drive';
+import { projectsRouter } from './routes/projects';
 
 const env = loadEnv();
 const app = express();
@@ -156,6 +157,13 @@ app.use('/drive', driveRouter({
   fbAuth,
   fbDb,
   driveApiKey: env.GOOGLE_DRIVE_API_KEY,
+}));
+
+app.use('/projects', projectsRouter({
+  logger,
+  csrfProtection: csrfIfCookie(csrfProtection),
+  fbAuth,
+  fbDb,
 }));
 
 app.listen(env.PORT, () => {

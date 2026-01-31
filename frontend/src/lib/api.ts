@@ -95,11 +95,17 @@ export type VaultEntry = {
   isShared?: boolean;
   sharedWith?: string[];
   name: string;
+  url?: string | null;
   ip?: string | null;
   username?: string | null;
   password?: string | null;
   email?: string | null;
   connectionData?: string | null;
+  connectionJson?: any | null;
+  sapConnection?: string | null;
+  sapJson?: any | null;
+  vpnConnection?: string | null;
+  vpnJson?: any | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -188,9 +194,12 @@ export type DriveFile = {
   webViewLink?: string;
   webContentLink?: string;
   mimeType?: string;
+  iconLink?: string;
   size?: string;
   modifiedTime?: string;
 };
+
+export type DriveItem = DriveFile & { isFolder?: boolean };
 
 export async function getDriveSettings() {
   const { data } = await api.get('/drive/settings');
@@ -207,16 +216,108 @@ export async function listDriveFiles() {
   return data as { files: DriveFile[]; needsSetup?: boolean };
 }
 
+export async function browseDrive(parentId?: string | null) {
+  const { data } = await api.get('/drive/browse', { params: { parentId: parentId || undefined } });
+  return data as { items: DriveItem[]; needsSetup?: boolean; parentId?: string | null; rootFolderId?: string | null };
+}
+
 export async function uploadDriveFile(file: File) {
-  const form = new FormData();
-  form.append('file', file);
-  const { data } = await api.post('/drive/upload', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  // JSON upload (base64) to avoid multipart parsing deps.
+  // Backend may reply with 501 if upload is not configured.
+  const buf = await file.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const { data } = await api.post('/drive/upload', {
+    fileName: file.name,
+    mimeType: file.type || 'application/octet-stream',
+    dataBase64: b64,
   });
   return data as { ok: boolean; file: DriveFile };
 }
 
+// Notes Items
+export type NoteItem = { id: string; title: string; content: string; createdAt: string; updatedAt: string };
+
+export async function listNoteItems() {
+  const { data } = await api.get('/notes/items');
+  return data as { items: NoteItem[] };
+}
+
+export async function createNoteItem(title: string, content: string) {
+  const { data } = await api.post('/notes/items', { title, content });
+  return data as { ok: boolean; id: string };
+}
+
+export async function updateNoteItem(id: string, patch: Partial<Pick<NoteItem, 'title' | 'content'>>) {
+  const { data } = await api.put(`/notes/items/${id}`, patch);
+  return data as { ok: boolean };
+}
+
+export async function deleteNoteItem(id: string) {
+  const { data } = await api.delete(`/notes/items/${id}`);
+  return data as { ok: boolean };
+}
+
 export async function deleteDriveFile(fileId: string) {
   const { data } = await api.delete(`/drive/files/${fileId}`);
+  return data as { ok: boolean };
+}
+
+// Projetos / Kanban
+export type Project = {
+  id: string;
+  projectType?: 'sap' | 'general';
+  name: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  driveFolderOverrideId?: string | null;
+};
+
+export type KanbanColumn = { id: string; title: string };
+export type KanbanCard = {
+  id: string;
+  columnId: string;
+  title: string;
+  description?: string | null;
+  estimateHours?: number | null;
+  type?: 'sap' | 'general' | 'note' | null;
+  tags?: string[] | null;
+  comments?: Array<{ at: string; author?: string | null; text: string }> | null;
+  emails?: Array<{ at: string; subject?: string | null; body: string }> | null;
+  qaNotes?: string | null;
+  prodNotes?: string | null;
+  approvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+export type ProjectBoard = { columns: KanbanColumn[]; cards: KanbanCard[] };
+
+export async function listProjects() {
+  const { data } = await api.get('/projects');
+  return data as { projects: Project[] };
+}
+
+export async function createProject(name: string, description?: string, projectType: 'sap' | 'general' = 'sap') {
+  const { data } = await api.post('/projects', { name, description, projectType });
+  return data as { ok: boolean; id: string };
+}
+
+export async function updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'description' | 'driveFolderOverrideId'>>) {
+  const { data } = await api.put(`/projects/${id}`, patch);
+  return data as { ok: boolean };
+}
+
+export async function deleteProject(id: string) {
+  const { data } = await api.delete(`/projects/${id}`);
+  return data as { ok: boolean };
+}
+
+export async function getProjectBoard(id: string) {
+  const { data } = await api.get(`/projects/${id}/board`);
+  return data as { board: ProjectBoard };
+}
+
+export async function saveProjectBoard(id: string, board: ProjectBoard) {
+  const { data } = await api.put(`/projects/${id}/board`, { board });
   return data as { ok: boolean };
 }

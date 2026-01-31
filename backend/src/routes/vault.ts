@@ -20,20 +20,59 @@ type VaultEntry = {
   ownerEmail?: string;
   sharedWith?: string[];
   name: string;
+  url?: string | null;
   ip?: string | null;
   username?: string | null;
   password?: string | null;
   email?: string | null;
   connectionData?: string | null;
+  // Backward compatible: stored encrypted as STRING.
+  // Now can hold a JSON string with structured connection details.
+  sapConnection?: string | null;
+  vpnConnection?: string | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
+function safeJsonParse<T = any>(value: string | null | undefined): T | null {
+  if (!value) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  if (!(s.startsWith('{') || s.startsWith('['))) return null;
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return null;
+  }
+}
+
 function getIp(req: any) {
   return (req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim())
     || req.socket?.remoteAddress
     || req.ip;
+}
+
+function tryParseJson<T = any>(s: any): T | null {
+  if (!s || typeof s !== 'string') return null;
+  const t = s.trim();
+  if (!(t.startsWith('{') || t.startsWith('['))) return null;
+  try {
+    return JSON.parse(t) as T;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeToString(v: any): string | null {
+  if (v === undefined) return null;
+  if (v === null) return null;
+  if (typeof v === 'string') return v;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
 }
 
 export function vaultRouter(opts: VaultRouterOpts) {
@@ -62,6 +101,20 @@ export function vaultRouter(opts: VaultRouterOpts) {
       const ownerUid = data.ownerUid ?? uid;
       const ownerEmail = data.ownerEmail ?? email ?? null;
       const canEdit = ownerUid === uid;
+      const url = maybeDecrypt(data.url);
+      const ip = maybeDecrypt(data.ip);
+      const username = maybeDecrypt(data.username);
+      const password = maybeDecrypt(data.password);
+      const entryEmail = maybeDecrypt(data.email);
+      const connectionData = maybeDecrypt(data.connectionData);
+      const sapConnection = maybeDecrypt(data.sapConnection);
+      const vpnConnection = maybeDecrypt(data.vpnConnection);
+      const notes = maybeDecrypt(data.notes);
+
+      const connectionJson = tryParseJson(connectionData);
+      const sapJson = tryParseJson(sapConnection);
+      const vpnJson = tryParseJson(vpnConnection);
+
       return {
         id: d.id,
         ownerUid,
@@ -70,12 +123,18 @@ export function vaultRouter(opts: VaultRouterOpts) {
         isShared: ownerUid !== uid,
         sharedWith: Array.isArray(data.sharedWith) ? data.sharedWith : [],
         name: data.name,
-        ip: maybeDecrypt(data.ip),
-        username: maybeDecrypt(data.username),
-        password: maybeDecrypt(data.password),
-        email: maybeDecrypt(data.email),
-        connectionData: maybeDecrypt(data.connectionData),
-        notes: maybeDecrypt(data.notes),
+        url,
+        ip,
+        username,
+        password,
+        email: entryEmail,
+        connectionData,
+        connectionJson,
+        sapConnection,
+        sapJson,
+        vpnConnection,
+        vpnJson,
+        notes,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       };
@@ -109,11 +168,14 @@ export function vaultRouter(opts: VaultRouterOpts) {
       ownerEmail: req.user!.email ?? null,
       sharedWith: [],
       name: body.name,
+      url: maybeEncrypt(body.url),
       ip: maybeEncrypt(body.ip),
       username: maybeEncrypt(body.username),
       password: maybeEncrypt(body.password),
       email: maybeEncrypt(body.email),
-      connectionData: maybeEncrypt(body.connectionData),
+      connectionData: maybeEncrypt(normalizeToString(body.connectionData)),
+      sapConnection: maybeEncrypt(normalizeToString(body.sapConnection)),
+      vpnConnection: maybeEncrypt(normalizeToString(body.vpnConnection)),
       notes: maybeEncrypt(body.notes),
       createdAt: now,
       updatedAt: now,
@@ -148,11 +210,14 @@ export function vaultRouter(opts: VaultRouterOpts) {
     const patch: any = { updatedAt: now };
 
     if (body.name !== undefined) patch.name = body.name;
+    if (body.url !== undefined) patch.url = maybeEncrypt(body.url);
     if (body.ip !== undefined) patch.ip = maybeEncrypt(body.ip);
     if (body.username !== undefined) patch.username = maybeEncrypt(body.username);
     if (body.password !== undefined) patch.password = maybeEncrypt(body.password);
     if (body.email !== undefined) patch.email = maybeEncrypt(body.email);
-    if (body.connectionData !== undefined) patch.connectionData = maybeEncrypt(body.connectionData);
+    if (body.connectionData !== undefined) patch.connectionData = maybeEncrypt(normalizeToString(body.connectionData));
+    if (body.sapConnection !== undefined) patch.sapConnection = maybeEncrypt(normalizeToString(body.sapConnection));
+    if (body.vpnConnection !== undefined) patch.vpnConnection = maybeEncrypt(normalizeToString(body.vpnConnection));
     if (body.notes !== undefined) patch.notes = maybeEncrypt(body.notes);
 
     await col.doc(id).set(patch, { merge: true });

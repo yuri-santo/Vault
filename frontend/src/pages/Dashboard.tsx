@@ -4,27 +4,43 @@ import {
   acceptInvite,
   createEntry,
   declineInvite,
+  browseDrive,
+  createProject,
   deleteDriveFile,
   deleteEntry,
+  deleteProject,
   getDriveSettings,
   getNotes,
+  listNoteItems,
+  createNoteItem,
+  updateNoteItem,
+  deleteNoteItem,
+  getProjectBoard,
   listConnections,
   listDriveFiles,
   listEntries,
   listInvites,
+  listProjects,
   saveNotes,
+  saveProjectBoard,
   sendInvite,
   setDriveFolder,
   updateEntry,
+  updateEntryShare,
+  updateProject,
   type DriveFile,
+  type DriveItem,
+  type Project,
+  type ProjectBoard,
   type ShareConnection,
   type ShareInvite,
   type VaultEntry,
+  type NoteItem,
 } from '../lib/api';
 import { Modal } from '../components/modal';
 import { useToast } from '../components/toast';
 
-function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive' | 'note' | 'search' | 'dots' | 'copy' | 'eye' | 'edit' | 'trash' | 'plus'; className?: string }) {
+function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive' | 'projects' | 'folder' | 'file' | 'note' | 'search' | 'filter' | 'dots' | 'copy' | 'eye' | 'edit' | 'trash' | 'plus'; className?: string }) {
   const common = cn('inline-block', className);
   // Tiny inline icons (no deps)
   switch (name) {
@@ -56,6 +72,27 @@ function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive'
           <path d="M4 11h8l4 7" stroke="currentColor" strokeWidth="1.7" />
         </svg>
       );
+    case 'projects':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 7a2 2 0 0 1 2-2h5v14H6a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M11 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7V5z" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M7 9h2M7 12h2M7 15h2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'folder':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="1.7" />
+        </svg>
+      );
+    case 'file':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M7 3h7l3 3v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.7" />
+        </svg>
+      );
     case 'note':
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -68,6 +105,12 @@ function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive'
         <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z" stroke="currentColor" strokeWidth="1.7" />
           <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case 'filter':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 5h18l-7 8v6l-4-2v-4L3 5z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
         </svg>
       );
     case 'dots':
@@ -118,7 +161,7 @@ function maskPassword(p: string) {
   return '•'.repeat(Math.min(Math.max(p.length, 8), 14));
 }
 
-type Section = 'vault' | 'sharing' | 'drive' | 'notes';
+type Section = 'vault' | 'sharing' | 'drive' | 'projects' | 'notes';
 
 function useOutsideClick(ref: React.RefObject<HTMLElement>, handler: () => void) {
   useEffect(() => {
@@ -335,6 +378,7 @@ function EntryInlineActions({
   entry,
   revealed,
   onRevealToggle,
+  onShare,
   onEdit,
   onDelete,
   compact,
@@ -342,6 +386,7 @@ function EntryInlineActions({
   entry: VaultEntry;
   revealed: boolean;
   onRevealToggle: () => void;
+  onShare: () => void;
   onEdit: () => void;
   onDelete: () => void;
   compact?: boolean;
@@ -370,6 +415,14 @@ function EntryInlineActions({
         onClick={onRevealToggle}
       >
         <Icon name="eye" className="h-4 w-4" />
+      </IconActionButton>
+
+      <IconActionButton
+        title={entry.canEdit ? 'Compartilhar' : 'Somente leitura'}
+        disabled={!entry.canEdit}
+        onClick={onShare}
+      >
+        <Icon name="share" className={cn('h-4 w-4', entry.sharedWith?.length ? 'text-violet-700' : '')} />
       </IconActionButton>
 
       <IconActionButton
@@ -407,18 +460,77 @@ export default function Dashboard({
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [query, setQuery] = useState('');
+  const [alphaFilter, setAlphaFilter] = useState('');
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [advFilters, setAdvFilters] = useState({
+    scope: 'all' as 'all' | 'mine' | 'shared',
+    ownerEmail: '',
+    hasSap: false,
+    hasVpn: false,
+  });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VaultEntry | null>(null);
   const [form, setForm] = useState({
     name: '',
+    url: '',
     username: '',
     password: '',
     ip: '',
     email: '',
     connectionData: '',
+    sapConnection: '',
+    vpnConnection: '',
     notes: '',
   });
+
+  type SapConn = {
+    applicationServer: string;
+    instanceNumber: string;
+    systemId: string;
+    client: string;
+    language: string;
+    sapRouter: string;
+    messageServer: string;
+    logonGroup: string;
+    sncName: string;
+  };
+  type VpnConn = {
+    provider: string;
+    server: string;
+    port: string;
+    protocol: string;
+    username: string;
+    domain: string;
+    profile: string;
+    notes: string;
+  };
+
+  const emptySap: SapConn = {
+    applicationServer: '',
+    instanceNumber: '',
+    systemId: '',
+    client: '',
+    language: 'PT',
+    sapRouter: '',
+    messageServer: '',
+    logonGroup: '',
+    sncName: '',
+  };
+  const emptyVpn: VpnConn = {
+    provider: '',
+    server: '',
+    port: '',
+    protocol: '',
+    username: '',
+    domain: '',
+    profile: '',
+    notes: '',
+  };
+
+  const [sapConn, setSapConn] = useState<SapConn>(emptySap);
+  const [vpnConn, setVpnConn] = useState<VpnConn>(emptyVpn);
+  const [metaJsonText, setMetaJsonText] = useState('');
 
   const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
 
@@ -428,6 +540,11 @@ export default function Dashboard({
   const [receivedInvites, setReceivedInvites] = useState<ShareInvite[]>([]);
   const [connections, setConnections] = useState<ShareConnection[]>([]);
 
+  // Compartilhar senha (por entrada)
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareEntry, setShareEntry] = useState<VaultEntry | null>(null);
+  const [shareSelectedUids, setShareSelectedUids] = useState<Record<string, boolean>>({});
+
   // Drive
   const [driveFolder, setDriveFolderState] = useState('');
   const [driveOpenUrl, setDriveOpenUrl] = useState<string | null>(null);
@@ -436,21 +553,44 @@ export default function Dashboard({
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [driveNeedsSetup, setDriveNeedsSetup] = useState(false);
 
+  // Drive Explorer
+  const [drivePath, setDrivePath] = useState<{ id: string; name: string }[]>([]);
+  const [driveItems, setDriveItems] = useState<DriveItem[]>([]);
+  const [driveExplorerLoading, setDriveExplorerLoading] = useState(false);
+
+  // Projects / Kanban
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [projectBoard, setProjectBoard] = useState<ProjectBoard | null>(null);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [newCardTitle, setNewCardTitle] = useState('');
+  const [newCardDesc, setNewCardDesc] = useState('');
+  const [newCardColumnId, setNewCardColumnId] = useState('');
+
   // Notes
   const [notes, setNotes] = useState('');
   const [notesDirty, setNotesDirty] = useState(false);
   const [notesUpdatedAt, setNotesUpdatedAt] = useState<string | null>(null);
+  const [noteItems, setNoteItems] = useState<NoteItem[]>([]);
+  const [noteQuery, setNoteQuery] = useState('');
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+  const [noteForm, setNoteForm] = useState({ title: '', content: '' });
 
   async function refreshAll() {
     setLoading(true);
     try {
-      const [es, inv, conns, note, driveCfg, driveList] = await Promise.all([
+      const [es, inv, conns, note, noteItemsRes, driveCfg, driveList, projs] = await Promise.all([
         listEntries(),
         listInvites(),
         listConnections(),
         getNotes(),
+        listNoteItems().catch(() => ({ items: [] } as any)),
         getDriveSettings(),
         listDriveFiles().catch(() => ({ files: [], needsSetup: false } as any)),
+        listProjects().catch(() => ({ projects: [] } as any)),
       ]);
 
       setEntries(es);
@@ -459,12 +599,18 @@ export default function Dashboard({
       setConnections(conns.connections ?? []);
       setNotes(note.notes ?? '');
       setNotesUpdatedAt(note.updatedAt ?? null);
+      setNoteItems((noteItemsRes as any).items ?? []);
+      setNoteItems((noteItemsRes as any).items ?? []);
 
       setDriveEnabled(Boolean(driveCfg.enabled));
       setDriveUploadEnabled(Boolean(driveCfg.uploadEnabled));
       setDriveOpenUrl(driveCfg.openUrl ?? null);
       setDriveNeedsSetup(Boolean((driveList as any).needsSetup));
       setDriveFiles((driveList as any).files ?? []);
+
+      const pList = (projs as any).projects ?? [];
+      setProjects(pList);
+      if (!activeProjectId && pList.length > 0) setActiveProjectId(pList[0].id);
     } finally {
       setLoading(false);
     }
@@ -475,14 +621,49 @@ export default function Dashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!activeProjectId) {
+      setProjectBoard(null);
+      return;
+    }
+    getProjectBoard(activeProjectId)
+      .then((res) => {
+        setProjectBoard(res.board);
+        const firstCol = res.board.columns?.[0]?.id;
+        if (firstCol && !newCardColumnId) setNewCardColumnId(firstCol);
+      })
+      .catch(() => {
+        setProjectBoard(null);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return entries;
     return entries.filter((e) => {
+      if (alphaFilter) {
+        const n = (e.name ?? '').trim();
+        if (!n.toUpperCase().startsWith(alphaFilter)) return false;
+      }
+      if (advFilters.scope === 'mine' && !e.canEdit) return false;
+      if (advFilters.scope === 'shared' && !e.isShared) return false;
+      if (advFilters.ownerEmail.trim()) {
+        const own = (e.ownerEmail ?? '').toLowerCase();
+        if (!own.includes(advFilters.ownerEmail.trim().toLowerCase())) return false;
+      }
+      if (advFilters.hasSap) {
+        const has = Boolean((e as any).sapJson) || Boolean((e as any).sapConnection);
+        if (!has) return false;
+      }
+      if (advFilters.hasVpn) {
+        const has = Boolean((e as any).vpnJson) || Boolean((e as any).vpnConnection);
+        if (!has) return false;
+      }
+      if (!q) return true;
       const blob = [e.name, e.username, e.email, e.ip, e.ownerEmail].filter(Boolean).join(' ').toLowerCase();
       return blob.includes(q);
     });
-  }, [entries, query]);
+  }, [entries, query, alphaFilter, advFilters]);
 
   const stats = useMemo(() => {
     const total = entries.length;
@@ -493,22 +674,57 @@ export default function Dashboard({
 
   function openNew() {
     setEditing(null);
-    setForm({ name: '', username: '', password: '', ip: '', email: '', connectionData: '', notes: '' });
+    setForm({
+      name: '',
+      url: '',
+      username: '',
+      password: '',
+      ip: '',
+      email: '',
+      connectionData: '',
+      sapConnection: '',
+      vpnConnection: '',
+      notes: '',
+    });
+    setSapConn(emptySap);
+    setVpnConn(emptyVpn);
+    setMetaJsonText('');
     setModalOpen(true);
   }
 
   function openEdit(e: VaultEntry) {
     setEditing(e);
+    const sap = (e as any).sapJson ?? null;
+    const vpn = (e as any).vpnJson ?? null;
+    const meta = (e as any).connectionJson ?? null;
+    setSapConn({ ...emptySap, ...(sap && typeof sap === 'object' ? sap : {}) });
+    setVpnConn({ ...emptyVpn, ...(vpn && typeof vpn === 'object' ? vpn : {}) });
+    setMetaJsonText(meta && typeof meta === 'object' ? JSON.stringify(meta, null, 2) : (e.connectionData ?? ''));
     setForm({
       name: e.name ?? '',
+      url: (e as any).url ?? '',
       username: e.username ?? '',
       password: e.password ?? '',
       ip: e.ip ?? '',
       email: e.email ?? '',
       connectionData: e.connectionData ?? '',
+      sapConnection: (e as any).sapConnection ?? '',
+      vpnConnection: (e as any).vpnConnection ?? '',
       notes: e.notes ?? '',
     });
     setModalOpen(true);
+  }
+
+  function openShare(e: VaultEntry) {
+    if (!e.canEdit) {
+      push('Somente o dono pode compartilhar essa senha', 'error');
+      return;
+    }
+    setShareEntry(e);
+    const preset: Record<string, boolean> = {};
+    (e.sharedWith ?? []).forEach((uid) => (preset[uid] = true));
+    setShareSelectedUids(preset);
+    setShareModalOpen(true);
   }
 
   async function saveEntry() {
@@ -517,26 +733,47 @@ export default function Dashboard({
       return;
     }
 
+    const hasAny = (obj: any) => Object.values(obj ?? {}).some((v: any) => String(v ?? '').trim() !== '');
+    let metaPayload: any = null;
+    const metaRaw = (metaJsonText ?? '').trim();
+    if (metaRaw) {
+      try {
+        metaPayload = JSON.parse(metaRaw);
+      } catch {
+        // fallback: store as plain text
+        metaPayload = metaRaw;
+      }
+    }
+
+    const sapPayload = hasAny(sapConn) ? sapConn : null;
+    const vpnPayload = hasAny(vpnConn) ? vpnConn : null;
+
     try {
       if (editing) {
         await updateEntry(editing.id, {
           name: form.name,
+          url: form.url || null,
           username: form.username || null,
           password: form.password || null,
           ip: form.ip || null,
           email: form.email || null,
-          connectionData: form.connectionData || null,
+          connectionData: metaPayload ?? (form.connectionData || null),
+          sapConnection: sapPayload ?? (form.sapConnection || null),
+          vpnConnection: vpnPayload ?? (form.vpnConnection || null),
           notes: form.notes || null,
         });
         push('Senha atualizada ✅', 'success');
       } else {
         await createEntry({
           name: form.name,
+          url: form.url || null,
           username: form.username || null,
           password: form.password || null,
           ip: form.ip || null,
           email: form.email || null,
-          connectionData: form.connectionData || null,
+          connectionData: metaPayload ?? (form.connectionData || null),
+          sapConnection: sapPayload ?? (form.sapConnection || null),
+          vpnConnection: vpnPayload ?? (form.vpnConnection || null),
           notes: form.notes || null,
           ownerEmail: null,
           ownerUid: undefined,
@@ -618,6 +855,117 @@ export default function Dashboard({
     } catch {
       push('Falha ao remover', 'error');
     }
+  }
+
+  async function openDriveRoot() {
+    setDriveExplorerLoading(true);
+    try {
+      const res = await browseDrive(null);
+      setDriveItems((res.items ?? []).map((it) => ({ ...it, isFolder: it.mimeType === 'application/vnd.google-apps.folder' })));
+      setDrivePath([]);
+    } finally {
+      setDriveExplorerLoading(false);
+    }
+  }
+
+  async function enterDriveFolder(item: DriveItem) {
+    if (!item.id) return;
+    setDriveExplorerLoading(true);
+    try {
+      const res = await browseDrive(item.id);
+      setDriveItems((res.items ?? []).map((it) => ({ ...it, isFolder: it.mimeType === 'application/vnd.google-apps.folder' })));
+      setDrivePath((prev) => [...prev, { id: item.id, name: item.name }]);
+    } finally {
+      setDriveExplorerLoading(false);
+    }
+  }
+
+  async function goDriveBreadcrumb(index: number) {
+    // index is the last folder to keep (-1 means root)
+    const newPath = drivePath.slice(0, index + 1);
+    setDriveExplorerLoading(true);
+    try {
+      const parentId = newPath.length ? newPath[newPath.length - 1].id : null;
+      const res = await browseDrive(parentId);
+      setDriveItems((res.items ?? []).map((it) => ({ ...it, isFolder: it.mimeType === 'application/vnd.google-apps.folder' })));
+      setDrivePath(newPath);
+    } finally {
+      setDriveExplorerLoading(false);
+    }
+  }
+
+  async function createNewProject() {
+    const name = newProjectName.trim();
+    if (!name) return push('Informe o nome do projeto', 'error');
+    try {
+      const r = await createProject({ name, description: null });
+      setNewProjectName('');
+      push('Projeto criado ✅', 'success');
+      const ps = [...projects, r.project];
+      setProjects(ps);
+      setActiveProjectId(r.project.id);
+    } catch {
+      push('Falha ao criar projeto', 'error');
+    }
+  }
+
+  async function removeProject(id: string) {
+    if (!confirm('Excluir projeto? Isso remove o quadro associado.')) return;
+    try {
+      await deleteProject(id);
+      push('Projeto excluído', 'success');
+      const ps = projects.filter((p) => p.id !== id);
+      setProjects(ps);
+      if (activeProjectId === id) {
+        setActiveProjectId(ps[0]?.id || null);
+      }
+    } catch {
+      push('Falha ao excluir projeto', 'error');
+    }
+  }
+
+  async function saveBoard(next: ProjectBoard) {
+    setProjectBoard(next);
+    if (!activeProjectId) return;
+    try {
+      await saveProjectBoard(activeProjectId, next);
+    } catch {
+      push('Falha ao salvar board', 'error');
+    }
+  }
+
+  async function addKanbanCard(columnId: string) {
+    if (!projectBoard) return;
+    const title = newCardTitle.trim();
+    if (!title) return push('Informe o título do card', 'error');
+    const id = `c_${Math.random().toString(36).slice(2, 10)}`;
+    const now = new Date().toISOString();
+    const next: ProjectBoard = {
+      ...projectBoard,
+      cards: [
+        ...projectBoard.cards,
+        { id, columnId, title, description: newCardDescription || null, createdAt: now, updatedAt: now },
+      ],
+    };
+    setNewCardTitle('');
+    setNewCardDescription('');
+    await saveBoard(next);
+  }
+
+  async function moveKanbanCard(cardId: string, columnId: string) {
+    if (!projectBoard) return;
+    const now = new Date().toISOString();
+    const next: ProjectBoard = {
+      ...projectBoard,
+      cards: projectBoard.cards.map((c) => (c.id === cardId ? { ...c, columnId, updatedAt: now } : c)),
+    };
+    await saveBoard(next);
+  }
+
+  async function deleteKanbanCard(cardId: string) {
+    if (!projectBoard) return;
+    const next: ProjectBoard = { ...projectBoard, cards: projectBoard.cards.filter((c) => c.id !== cardId) };
+    await saveBoard(next);
   }
 
   async function saveQuickNotes() {
@@ -718,6 +1066,14 @@ export default function Dashboard({
                       className="pl-9 bg-white/90"
                     />
                   </div>
+                  <Button
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => setFilterModalOpen(true)}
+                    title="Filtro avançado"
+                  >
+                    <Icon name="filter" className="h-4 w-4" />
+                  </Button>
                   <Button className="shrink-0" onClick={openNew}>
                     <Icon name="plus" className="h-4 w-4 mr-2" />
                     Nova Senha
@@ -752,7 +1108,7 @@ export default function Dashboard({
             </div>
 
             {/* Section switch (mobile) */}
-            <div className="md:hidden mt-4 grid grid-cols-4 gap-2">
+            <div className="md:hidden mt-4 grid grid-cols-5 gap-2">
               <button
                 type="button"
                 onClick={() => setSection('vault')}
@@ -785,6 +1141,16 @@ export default function Dashboard({
               </button>
               <button
                 type="button"
+                onClick={() => setSection('projects')}
+                className={cn(
+                  'rounded-2xl border border-zinc-200/70 bg-white/70 py-2 text-xs font-medium',
+                  section === 'projects' && 'bg-violet-600 text-white border-violet-500'
+                )}
+              >
+                Projetos
+              </button>
+              <button
+                type="button"
                 onClick={() => setSection('notes')}
                 className={cn(
                   'rounded-2xl border border-zinc-200/70 bg-white/70 py-2 text-xs font-medium',
@@ -809,6 +1175,31 @@ export default function Dashboard({
                 </div>
 
                 <div className="mt-3 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 border-b border-zinc-200/70 bg-white/50">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex flex-wrap gap-1">
+                        {['', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')].map((L) => (
+                          <button
+                            key={L || 'all'}
+                            type="button"
+                            onClick={() => setAlphaFilter(L)}
+                            className={cn(
+                              'h-7 min-w-7 px-2 rounded-lg border text-[11px] font-medium transition',
+                              alphaFilter === L
+                                ? 'bg-violet-600 text-white border-violet-500'
+                                : 'bg-white/90 border-zinc-200/70 text-zinc-600 hover:bg-zinc-50'
+                            )}
+                            title={L ? `Filtrar por ${L}` : 'Todas'}
+                          >
+                            {L || 'Tudo'}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-[11px] text-zinc-500">
+                        {alphaFilter ? `Filtro: ${alphaFilter}` : 'Sem filtro por letra'}
+                      </div>
+                    </div>
+                  </div>
                   <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_184px] gap-3 px-5 py-3 border-b border-zinc-200/70 text-[11px] uppercase tracking-wide text-zinc-500">
                     <div>Serviço / Nome</div>
                     <div>Usuário</div>
@@ -856,13 +1247,14 @@ export default function Dashboard({
                                 <div className="min-w-0">
                                   <div className="font-medium truncate">{e.name}</div>
                                   <div className="text-xs text-zinc-500 mt-1 break-all">
-                                    {e.email || e.ip || e.ownerEmail || '—'}
+                                    {e.isShared ? `Compartilhado por ${e.ownerEmail || '—'}` : (e.email || e.ip || e.ownerEmail || '—')}
                                   </div>
                                 </div>
                                 <EntryInlineActions
                                   entry={e}
                                   revealed={revealed}
                                   onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                                  onShare={() => openShare(e)}
                                   onEdit={() => openEdit(e)}
                                   onDelete={() => removeEntry(e)}
                                   compact
@@ -899,7 +1291,7 @@ export default function Dashboard({
                               <div className="min-w-0">
                                 <div className="font-medium truncate">{e.name}</div>
                                 <div className="text-xs text-zinc-500 mt-1 truncate">
-                                  {e.ownerEmail || '—'}
+                                  {e.isShared ? `Compartilhado por ${e.ownerEmail || '—'}` : (e.ownerEmail || '—')}
                                 </div>
                               </div>
 
@@ -920,6 +1312,7 @@ export default function Dashboard({
                                   entry={e}
                                   revealed={revealed}
                                   onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
+                                  onShare={() => openShare(e)}
                                   onEdit={() => openEdit(e)}
                                   onDelete={() => removeEntry(e)}
                                 />
@@ -1099,11 +1492,9 @@ export default function Dashboard({
                                   Ver
                                 </a>
                               )}
-                              {driveUploadEnabled && (
-                                <Button variant="secondary" onClick={() => removeDriveFile(f.id)}>
-                                  Remover
-                                </Button>
-                              )}
+                              <Button variant="secondary" onClick={() => removeDriveFile(f.id)}>
+                                Remover
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -1111,18 +1502,222 @@ export default function Dashboard({
                     )}
                   </div>
 
-                  {!driveUploadEnabled && (
-                    <div className="mt-3 text-xs text-zinc-500">
-                      No modo <b>link público</b>, upload/remoção via app não está disponível. Use <b>Abrir pasta</b>.
+                  <div className="mt-3 text-xs text-zinc-500">
+                    <b>Remover</b> aqui apenas oculta o arquivo da sua lista (não apaga do Drive). Para organizar ou excluir de verdade, use <b>Abrir pasta</b>.
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="text-xs font-semibold text-zinc-600">Explorer (estilo Finder)</div>
+                      <div className="text-xs text-zinc-500">Navegue pelas pastas do link salvo (pastas e arquivos).</div>
                     </div>
-                  )}
+                    <Button variant="secondary" onClick={openDriveRoot} disabled={driveExplorerLoading || driveNeedsSetup}>
+                      Abrir raiz
+                    </Button>
+                  </div>
+
+                  <div className="mt-2 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-4">
+                    {driveNeedsSetup ? (
+                      <div className="text-sm text-zinc-500">Defina uma pasta acima e clique em <b>Abrir raiz</b>.</div>
+                    ) : driveExplorerLoading ? (
+                      <div className="space-y-3">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">
+                          <button type="button" className="hover:text-violet-700" onClick={() => goDriveBreadcrumb(-1)}>
+                            Raiz
+                          </button>
+                          {drivePath.map((p, idx) => (
+                            <span key={p.id} className="flex items-center gap-2">
+                              <span className="opacity-50">/</span>
+                              <button type="button" className="hover:text-violet-700" onClick={() => goDriveBreadcrumb(idx)}>
+                                {p.name}
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+
+                        <div className="mt-3 divide-y divide-zinc-100">
+                          {driveItems.length === 0 ? (
+                            <div className="py-8 text-sm text-zinc-500">Pasta vazia.</div>
+                          ) : (
+                            driveItems.map((it) => (
+                              <div key={it.id} className="py-3 flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex items-center gap-3">
+                                  <div className="h-9 w-9 rounded-2xl border border-zinc-200/70 bg-white flex items-center justify-center">
+                                    <Icon name={it.isFolder ? 'folder' : 'file'} className="h-4 w-4 text-violet-600" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium truncate">{it.name}</div>
+                                    <div className="text-xs text-zinc-500 truncate">{it.isFolder ? 'Pasta' : 'Arquivo'} {it.modifiedTime ? `• ${new Date(it.modifiedTime).toLocaleString()}` : ''}</div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {it.isFolder ? (
+                                    <Button variant="secondary" onClick={() => enterDriveFolder(it)}>
+                                      Abrir
+                                    </Button>
+                                  ) : it.webViewLink ? (
+                                    <a href={it.webViewLink} target="_blank" rel="noreferrer" className="text-sm text-violet-700 hover:text-violet-800 font-medium">
+                                      Visualizar
+                                    </a>
+                                  ) : null}
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(it.webViewLink || '').then(() => push('Link copiado', 'success'));
+                                    }}
+                                    disabled={!it.webViewLink}
+                                  >
+                                    Copiar link
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Projects / Kanban */}
+            {section === 'projects' && (
+              <div className="mt-6 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2">
+                    <Icon name="projects" className="h-5 w-5 text-violet-600" />
+                    <div>
+                      <div className="font-semibold">Projetos & Kanban</div>
+                      <div className="text-xs text-zinc-500">Organize tarefas, dúvidas e notas técnicas em colunas (estilo Jira/Kanban).</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
+                  <div className="rounded-3xl border border-zinc-200/70 bg-white p-4">
+                    <div className="text-xs font-semibold text-zinc-600">Seus projetos</div>
+                    <div className="mt-3 flex gap-2">
+                      <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nome do projeto" />
+                      <Button onClick={createNewProject}>Criar</Button>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      {projects.length === 0 ? (
+                        <div className="text-sm text-zinc-500">Crie um projeto para começar.</div>
+                      ) : (
+                        projects.map((p) => (
+                          <div key={p.id} className={cn('flex items-center justify-between gap-2 rounded-2xl border border-zinc-200/70 px-3 py-2', activeProjectId === p.id ? 'bg-violet-50 border-violet-200' : 'bg-white')}>
+                            <button type="button" className="min-w-0 text-left flex-1" onClick={() => setActiveProjectId(p.id)}>
+                              <div className="text-sm font-medium truncate">{p.name}</div>
+                              <div className="text-xs text-zinc-500 truncate">Atualizado: {new Date(p.updatedAt).toLocaleDateString()}</div>
+                            </button>
+                            <button type="button" className="text-zinc-400 hover:text-red-600" onClick={() => removeProject(p.id)} title="Excluir">
+                              <Icon name="trash" className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="mt-4 text-xs text-zinc-500">
+                      Dica: use o <b>Drive Explorer</b> para guardar docs do projeto e copie links com 1 clique.
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-zinc-200/70 bg-white p-4 overflow-x-auto">
+                    {!activeProjectId ? (
+                      <div className="text-sm text-zinc-500">Selecione um projeto.</div>
+                    ) : projectBoardLoading ? (
+                      <div className="space-y-3">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : !projectBoard ? (
+                      <div className="text-sm text-zinc-500">Carregando board...</div>
+                    ) : (
+                      <div className="min-w-[880px]">
+                        <div className="grid grid-cols-4 gap-3">
+                          {projectBoard.columns.map((col) => (
+                            <div key={col.id} className="rounded-3xl border border-zinc-200/70 bg-zinc-50 p-3">
+                              <div className="flex items-center justify-between">
+                                <div className="font-semibold text-sm">{col.title}</div>
+                                <div className="text-xs text-zinc-500">{projectBoard.cards.filter((c) => c.columnId === col.id).length}</div>
+                              </div>
+
+                              <div className="mt-3 space-y-2">
+                                {projectBoard.cards
+                                  .filter((c) => c.columnId === col.id)
+                                  .map((c) => (
+                                    <div key={c.id} className="rounded-2xl border border-zinc-200/70 bg-white p-3">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <div className="font-medium text-sm truncate">{c.title}</div>
+                                          {c.description ? <div className="text-xs text-zinc-600 mt-1 whitespace-pre-wrap">{c.description}</div> : null}
+                                        </div>
+                                        <button type="button" className="text-zinc-400 hover:text-red-600" onClick={() => deleteKanbanCard(c.id)} title="Excluir">
+                                          <Icon name="trash" className="h-4 w-4" />
+                                        </button>
+                                      </div>
+
+                                      <div className="mt-2 flex items-center justify-between gap-2">
+                                        <select
+                                          value={c.columnId}
+                                          onChange={(e) => moveKanbanCard(c.id, e.target.value)}
+                                          className="text-xs rounded-xl border border-zinc-200 bg-white px-2 py-1"
+                                        >
+                                          {projectBoard.columns.map((cc) => (
+                                            <option key={cc.id} value={cc.id}>
+                                              {cc.title}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          type="button"
+                                          className="text-xs text-violet-700 hover:text-violet-800 font-medium"
+                                          onClick={() => navigator.clipboard.writeText(c.title + (c.description ? `\n\n${c.description}` : '')).then(() => push('Card copiado', 'success'))}
+                                        >
+                                          Copiar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+
+                              <div className="mt-3 rounded-2xl border border-zinc-200/70 bg-white p-3">
+                                <div className="text-xs font-semibold text-zinc-600">Novo card</div>
+                                <div className="mt-2 space-y-2">
+                                  <Input value={newCardTitle} onChange={(e) => setNewCardTitle(e.target.value)} placeholder="Título" />
+                                  <Textarea value={newCardDescription} onChange={(e) => setNewCardDescription(e.target.value)} rows={2} placeholder="Descrição (opcional)" />
+                                  <Button variant="secondary" onClick={() => addKanbanCard(col.id)}>
+                                    Adicionar
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Notes */}
             {section === 'notes' && (
-              <div className="mt-6 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
+              <div className="mt-6 space-y-4">
+                <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-2">
                     <Icon name="note" className="h-5 w-5 text-violet-600" />
@@ -1157,6 +1752,66 @@ export default function Dashboard({
                     {notesDirty ? 'Não salvo ainda.' : 'Salvo.'}
                   </div>
                 </div>
+                </div>
+
+                <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <div className="font-semibold">Notas (cards)</div>
+                      <div className="text-xs text-zinc-500">Crie notas nomeadas com data, busque pelo nome ou conteúdo e use como referência de projeto.</div>
+                    </div>
+                    <Button onClick={() => { setEditingNote(null); setNoteModalOpen(true); setNoteForm({ title: '', content: '' }); }}>Nova nota</Button>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Icon name="search" className="h-4 w-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Input value={noteQuery} onChange={(e) => setNoteQuery(e.target.value)} placeholder="Buscar nota..." className="pl-9 bg-white/90" />
+                    </div>
+                    <Button variant="secondary" onClick={() => setNoteQuery('')}>Limpar</Button>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {(noteItems
+                      .filter((n) => {
+                        const q = noteQuery.trim().toLowerCase();
+                        if (!q) return true;
+                        return (n.title ?? '').toLowerCase().includes(q) || (n.content ?? '').toLowerCase().includes(q);
+                      })
+                      .sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt))
+                    ).map((n) => (
+                      <div key={n.id} className="rounded-2xl border border-zinc-200/70 bg-white p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-semibold text-sm">{n.title}</div>
+                            <div className="text-[11px] text-zinc-500">{new Date(n.updatedAt ?? n.createdAt).toLocaleString()}</div>
+                          </div>
+                          <div className="flex gap-1">
+                            <IconActionButton icon="copy" title="Copiar conteúdo" onClick={() => copyText(n.content)} />
+                            <IconActionButton icon="edit" title="Editar" onClick={() => { setEditingNote(n); setNoteForm({ title: n.title, content: n.content }); setNoteModalOpen(true); }} />
+                            <IconActionButton
+                              icon="trash"
+                              title="Excluir"
+                              onClick={async () => {
+                                if (!confirm('Excluir esta nota?')) return;
+                                try {
+                                  await deleteNoteItem(n.id);
+                                  setNoteItems((p) => p.filter((x) => x.id !== n.id));
+                                } catch {
+                                  push('Falha ao excluir nota', 'error');
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap line-clamp-5">{n.content}</div>
+                      </div>
+                    ))}
+                    {noteItems.length === 0 && (
+                      <div className="text-sm text-zinc-500">Nenhuma nota criada ainda.</div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1173,6 +1828,22 @@ export default function Dashboard({
           <div className="sm:col-span-2">
             <label className="text-xs font-medium text-zinc-600">Serviço / Nome</label>
             <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ex.: AWS Console" />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-zinc-600">URL (opcional)</label>
+            <div className="flex gap-2">
+              <Input value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} placeholder="Ex.: https://..." />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => copyText(form.url)}
+                disabled={!form.url.trim()}
+                title="Copiar"
+              >
+                <Icon name="copy" className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           <div>
@@ -1196,13 +1867,166 @@ export default function Dashboard({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Dados de conexão</label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-zinc-600">Conexão SAP (campos)</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => copyText(JSON.stringify(sapConn, null, 2))}
+                  title="Copiar JSON"
+                >
+                  <Icon name="copy" className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[11px] text-zinc-500">Application Server</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.applicationServer} onChange={(e) => setSapConn((p) => ({ ...p, applicationServer: e.target.value }))} placeholder="ex.: 10.0.0.10" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.applicationServer)} disabled={!sapConn.applicationServer.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Instância</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.instanceNumber} onChange={(e) => setSapConn((p) => ({ ...p, instanceNumber: e.target.value }))} placeholder="ex.: 00" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.instanceNumber)} disabled={!sapConn.instanceNumber.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">SID</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.systemId} onChange={(e) => setSapConn((p) => ({ ...p, systemId: e.target.value.toUpperCase() }))} placeholder="ex.: PRD" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.systemId)} disabled={!sapConn.systemId.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Client</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.client} onChange={(e) => setSapConn((p) => ({ ...p, client: e.target.value }))} placeholder="ex.: 100" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.client)} disabled={!sapConn.client.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Idioma</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.language} onChange={(e) => setSapConn((p) => ({ ...p, language: e.target.value }))} placeholder="ex.: PT" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.language)} disabled={!sapConn.language.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">SNC Name (opcional)</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.sncName} onChange={(e) => setSapConn((p) => ({ ...p, sncName: e.target.value }))} placeholder="ex.: p:CN=..." />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.sncName)} disabled={!sapConn.sncName.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="sm:col-span-3">
+                <label className="text-[11px] text-zinc-500">Cadeia SAProuter</label>
+                <div className="flex gap-2">
+                  <Textarea value={sapConn.sapRouter} onChange={(e) => setSapConn((p) => ({ ...p, sapRouter: e.target.value }))} rows={2} placeholder="/H/1.2.3.4/H/..." />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.sapRouter)} disabled={!sapConn.sapRouter.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Message Server</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.messageServer} onChange={(e) => setSapConn((p) => ({ ...p, messageServer: e.target.value }))} placeholder="ex.: msg01" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.messageServer)} disabled={!sapConn.messageServer.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-[11px] text-zinc-500">Logon Group</label>
+                <div className="flex gap-2">
+                  <Input value={sapConn.logonGroup} onChange={(e) => setSapConn((p) => ({ ...p, logonGroup: e.target.value }))} placeholder="ex.: PUBLIC" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.logonGroup)} disabled={!sapConn.logonGroup.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-zinc-600">Conexão VPN (campos)</label>
+              <Button type="button" variant="secondary" onClick={() => copyText(JSON.stringify(vpnConn, null, 2))} title="Copiar JSON">
+                <Icon name="copy" className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[11px] text-zinc-500">Provider</label>
+                <div className="flex gap-2">
+                  <Input value={vpnConn.provider} onChange={(e) => setVpnConn((p) => ({ ...p, provider: e.target.value }))} placeholder="ex.: FortiClient" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.provider)} disabled={!vpnConn.provider.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-[11px] text-zinc-500">Server / Gateway</label>
+                <div className="flex gap-2">
+                  <Input value={vpnConn.server} onChange={(e) => setVpnConn((p) => ({ ...p, server: e.target.value }))} placeholder="ex.: vpn.empresa.com" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.server)} disabled={!vpnConn.server.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Port</label>
+                <div className="flex gap-2">
+                  <Input value={vpnConn.port} onChange={(e) => setVpnConn((p) => ({ ...p, port: e.target.value }))} placeholder="ex.: 443" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.port)} disabled={!vpnConn.port.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Protocol</label>
+                <div className="flex gap-2">
+                  <Input value={vpnConn.protocol} onChange={(e) => setVpnConn((p) => ({ ...p, protocol: e.target.value }))} placeholder="ex.: SSL-VPN" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.protocol)} disabled={!vpnConn.protocol.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Username</label>
+                <div className="flex gap-2">
+                  <Input value={vpnConn.username} onChange={(e) => setVpnConn((p) => ({ ...p, username: e.target.value }))} placeholder="ex.: rafael" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.username)} disabled={!vpnConn.username.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-zinc-500">Domain/Realm</label>
+                <div className="flex gap-2">
+                  <Input value={vpnConn.domain} onChange={(e) => setVpnConn((p) => ({ ...p, domain: e.target.value }))} placeholder="ex.: AD" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.domain)} disabled={!vpnConn.domain.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="sm:col-span-3">
+                <label className="text-[11px] text-zinc-500">Profile / Observações</label>
+                <div className="flex gap-2">
+                  <Textarea value={vpnConn.profile} onChange={(e) => setVpnConn((p) => ({ ...p, profile: e.target.value }))} rows={2} placeholder="ex.: profile name / split tunneling / etc" />
+                  <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.profile)} disabled={!vpnConn.profile.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="sm:col-span-3">
+                <label className="text-[11px] text-zinc-500">Notas VPN</label>
+                <Textarea value={vpnConn.notes} onChange={(e) => setVpnConn((p) => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Tokens, certificados, passos..." />
+              </div>
+            </div>
+          </div>
+
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-zinc-600">Dados gerais / JSON (env, configs, apps)</label>
+              <Button type="button" variant="secondary" onClick={() => copyText(metaJsonText)} disabled={!metaJsonText.trim()} title="Copiar">
+                <Icon name="copy" className="h-4 w-4" />
+              </Button>
+            </div>
             <Textarea
-              value={form.connectionData}
-              onChange={(e) => setForm((p) => ({ ...p, connectionData: e.target.value }))}
-              rows={3}
-              placeholder="Portas, URLs, observações..."
+              value={metaJsonText}
+              onChange={(e) => setMetaJsonText(e.target.value)}
+              rows={4}
+              placeholder={'Cole um JSON (ex.: {"env": {"API_URL": "..."}, "urls": [...]}) ou texto livre'}
             />
+            <div className="mt-1 text-[11px] text-zinc-500">
+              Dica: se você colar um JSON válido aqui, o sistema salva estruturado e facilita filtros no futuro.
+            </div>
           </div>
 
           <div className="sm:col-span-2">
@@ -1221,6 +2045,175 @@ export default function Dashboard({
             Cancelar
           </Button>
           <Button onClick={saveEntry}>{editing ? 'Salvar alterações' : 'Criar senha'}</Button>
+        </div>
+      </Modal>
+
+      <Modal open={noteModalOpen} title={editingNote ? 'Editar nota' : 'Nova nota'} onClose={() => setNoteModalOpen(false)}>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-zinc-600">Título</label>
+            <Input value={noteForm.title} onChange={(e) => setNoteForm((p) => ({ ...p, title: e.target.value }))} placeholder="Ex.: Dúvida sobre ICMS" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-zinc-600">Conteúdo</label>
+            <Textarea value={noteForm.content} onChange={(e) => setNoteForm((p) => ({ ...p, content: e.target.value }))} rows={10} placeholder="Cole aqui um e-mail, uma anotação, um log, etc." className="bg-white/90" />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="secondary" onClick={() => setNoteModalOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                const title = noteForm.title.trim() || 'Sem título';
+                const content = noteForm.content;
+                try {
+                  if (editingNote) {
+                    const r = await updateNoteItem(editingNote.id, { title, content });
+                    setNoteItems((p) => p.map((x) => (x.id === editingNote.id ? r.item : x)));
+                  } else {
+                    const r = await createNoteItem({ title, content });
+                    setNoteItems((p) => [r.item, ...p]);
+                  }
+                  setNoteModalOpen(false);
+                } catch {
+                  push('Falha ao salvar nota', 'error');
+                }
+              }}
+            >
+              Salvar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal filtros avançados */}
+      <Modal
+        open={filterModalOpen}
+        title="Filtro avançado"
+        onClose={() => setFilterModalOpen(false)}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-zinc-600">Escopo</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-zinc-200/70 bg-white px-3 py-2 text-sm"
+              value={advFilters.scope}
+              onChange={(e) => setAdvFilters((p) => ({ ...p, scope: e.target.value as any }))}
+            >
+              <option value="all">Tudo</option>
+              <option value="mine">Somente minhas (editáveis)</option>
+              <option value="shared">Somente compartilhadas comigo</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-zinc-600">Filtrar por e-mail do dono (who shared)</label>
+            <Input
+              value={advFilters.ownerEmail}
+              onChange={(e) => setAdvFilters((p) => ({ ...p, ownerEmail: e.target.value }))}
+              placeholder="ex.: consultor@empresa.com"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={advFilters.hasSap}
+                onChange={(e) => setAdvFilters((p) => ({ ...p, hasSap: e.target.checked }))}
+              />
+              <span>Somente com SAP</span>
+            </label>
+            <label className="flex items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={advFilters.hasVpn}
+                onChange={(e) => setAdvFilters((p) => ({ ...p, hasVpn: e.target.checked }))}
+              />
+              <span>Somente com VPN</span>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setAdvFilters({ scope: 'all', ownerEmail: '', hasSap: false, hasVpn: false });
+                setAlphaFilter('');
+              }}
+            >
+              Limpar filtros
+            </Button>
+            <Button onClick={() => setFilterModalOpen(false)}>Aplicar</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal compartilhar senha */}
+      <Modal
+        open={shareModalOpen}
+        title={shareEntry ? `Compartilhar: ${shareEntry.name}` : 'Compartilhar senha'}
+        onClose={() => {
+          setShareModalOpen(false);
+          setShareEntry(null);
+        }}
+      >
+        <div className="text-sm text-zinc-600">
+          Selecione os usuários que terão acesso de leitura a esta senha. Os destinatários verão <b>quem compartilhou</b> (e-mail do dono) no painel.
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {connections.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
+              Você ainda não tem conexões aceitas. Vá em <b>Compartilhamento</b> e envie um convite para outro usuário.
+            </div>
+          ) : (
+            connections
+              .filter((c) => c.status === 'accepted')
+              .map((c) => {
+                const checked = Boolean(shareSelectedUids[c.otherUid]);
+                return (
+                  <label key={c.id} className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-zinc-800 truncate">{c.otherEmail}</div>
+                      <div className="text-xs text-zinc-500 truncate">Conexão aceita</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const v = e.target.checked;
+                        setShareSelectedUids((prev) => ({ ...prev, [c.otherUid]: v }));
+                      }}
+                      className="h-4 w-4 accent-violet-600"
+                    />
+                  </label>
+                );
+              })
+          )}
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <Button variant="secondary" onClick={() => setShareModalOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={async () => {
+              if (!shareEntry) return;
+              try {
+                const uids = Object.entries(shareSelectedUids)
+                  .filter(([, v]) => v)
+                  .map(([uid]) => uid);
+                await updateEntryShare(shareEntry.id, uids);
+                push('Compartilhamento atualizado ✅', 'success');
+                setShareModalOpen(false);
+                setShareEntry(null);
+                await refreshAll();
+              } catch {
+                push('Falha ao compartilhar', 'error');
+              }
+            }}
+          >
+            Salvar compartilhamento
+          </Button>
         </div>
       </Modal>
     </div>
