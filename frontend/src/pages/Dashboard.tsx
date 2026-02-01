@@ -1902,6 +1902,7 @@ export default function Dashboard({
                       <div className="text-xs text-zinc-500">Armazenamento temporário vinculado à sua pasta.</div>
                     </div>
                   </div>
+
                   {driveOpenUrl && (
                     <a
                       href={driveOpenUrl}
@@ -1948,7 +1949,12 @@ export default function Dashboard({
                             </div>
                             <div className="flex items-center gap-2">
                               {f.webViewLink && (
-                                <a href={f.webViewLink} target="_blank" rel="noreferrer" className="text-sm text-violet-700 hover:text-violet-800">
+                                <a
+                                  href={f.webViewLink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm text-violet-700 hover:text-violet-800"
+                                >
                                   Ver
                                 </a>
                               )}
@@ -1963,7 +1969,8 @@ export default function Dashboard({
                   </div>
 
                   <div className="mt-3 text-xs text-zinc-500">
-                    <b>Remover</b> aqui apenas oculta o arquivo da sua lista (não apaga do Drive). Para organizar ou excluir de verdade, use <b>Abrir pasta</b>.
+                    <b>Remover</b> aqui apenas oculta o arquivo da sua lista (não apaga do Drive). Para organizar ou excluir de verdade,
+                    use <b>Abrir pasta</b>.
                   </div>
                 </div>
 
@@ -1980,7 +1987,9 @@ export default function Dashboard({
 
                   <div className="mt-2 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-4">
                     {driveNeedsSetup ? (
-                      <div className="text-sm text-zinc-500">Defina uma pasta acima e clique em <b>Abrir raiz</b>.</div>
+                      <div className="text-sm text-zinc-500">
+                        Defina uma pasta acima e clique em <b>Abrir raiz</b>.
+                      </div>
                     ) : driveExplorerLoading ? (
                       <div className="space-y-3">
                         <Skeleton className="h-10 w-full" />
@@ -2015,7 +2024,10 @@ export default function Dashboard({
                                   </div>
                                   <div className="min-w-0">
                                     <div className="text-sm font-medium truncate">{it.name}</div>
-                                    <div className="text-xs text-zinc-500 truncate">{it.isFolder ? 'Pasta' : 'Arquivo'} {it.modifiedTime ? `• ${new Date(it.modifiedTime).toLocaleString()}` : ''}</div>
+                                    <div className="text-xs text-zinc-500 truncate">
+                                      {it.isFolder ? 'Pasta' : 'Arquivo'}
+                                      {it.modifiedTime ? ` • ${new Date(it.modifiedTime).toLocaleString()}` : ''}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -2025,10 +2037,16 @@ export default function Dashboard({
                                       Abrir
                                     </Button>
                                   ) : it.webViewLink ? (
-                                    <a href={it.webViewLink} target="_blank" rel="noreferrer" className="text-sm text-violet-700 hover:text-violet-800 font-medium">
+                                    <a
+                                      href={it.webViewLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-sm text-violet-700 hover:text-violet-800 font-medium"
+                                    >
                                       Visualizar
                                     </a>
                                   ) : null}
+
                                   <Button
                                     variant="secondary"
                                     onClick={() => {
@@ -2045,9 +2063,9 @@ export default function Dashboard({
                         </div>
                       </div>
                     )}
-                    </div>
                   </div>
                 </div>
+              </div>
             ) : null}
 
             {/* Projects / Kanban */}
