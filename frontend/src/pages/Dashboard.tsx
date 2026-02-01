@@ -1995,8 +1995,7 @@ export default function Dashboard({
                           </button>
                           {drivePath.map((p, idx) => (
                             <span key={p.id} className="flex items-center gap-2">
-                                {/* Avoid JSX parser ambiguity with raw '/' in some bundlers */}
-                                <span className="opacity-50">{'/'}</span>
+                              <span className="opacity-50">›</span>
                               <button type="button" className="hover:text-violet-700" onClick={() => goDriveBreadcrumb(idx)}>
                                 {p.name}
                               </button>
@@ -2060,7 +2059,7 @@ export default function Dashboard({
                     <Icon name="projects" className="h-5 w-5 text-violet-600" />
                     <div>
                       <div className="font-semibold">Projetos & Kanban</div>
-                      <div className="text-xs text-zinc-500">Organize tarefas, dúvidas e notas técnicas em colunas (estilo Jira{'/'}Kanban).</div>
+                      <div className="text-xs text-zinc-500">Organize tarefas, dúvidas e notas técnicas em colunas (estilo Jira/Kanban).</div>
                     </div>
                   </div>
                 </div>
