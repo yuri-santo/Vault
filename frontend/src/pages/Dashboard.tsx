@@ -1892,7 +1892,7 @@ export default function Dashboard({
             )}
 
             {/* Drive */}
-            {section === 'drive' && (
+            {section === 'drive' ? (
               <div className="mt-6 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
@@ -2049,7 +2049,7 @@ export default function Dashboard({
                   </div>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Projects / Kanban */}
             {section === 'projects' && (
