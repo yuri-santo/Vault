@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { Project, ProjectBoard } from '../../lib/api';
 import { Button, Input, Textarea } from '../../components/ui';
 
+export type CardColor = 'yellow' | 'blue' | 'green' | 'pink' | 'white';
+
 type Props = {
   projects: Project[];
   activeProjectId: string | null;
@@ -12,8 +14,8 @@ type Props = {
   setNewProjectName: (v: string) => void;
   newProjectDesc: string;
   setNewProjectDesc: (v: string) => void;
-  newProjectType: 'sap' | 'general';
-  setNewProjectType: (v: 'sap' | 'general') => void;
+  newProjectType: 'tarefa' | 'projeto';
+  setNewProjectType: (v: 'tarefa' | 'projeto') => void;
   newProjectHourlyRate: string;
   setNewProjectHourlyRate: (v: string) => void;
   creatingProject: boolean;
@@ -36,8 +38,8 @@ type Props = {
   setNewCardTitle: (v: string) => void;
   newCardDesc: string;
   setNewCardDesc: (v: string) => void;
-  newCardColor: string;
-  setNewCardColor: (v: string) => void;
+  newCardColor: CardColor;
+  setNewCardColor: React.Dispatch<React.SetStateAction<CardColor>>;
   addKanbanCard: (columnId: string) => Promise<void>;
 
   openCard: (card: any) => void;
@@ -121,18 +123,18 @@ export default function ProjectsSection(props: Props) {
           <Input value={newProjectHourlyRate} onChange={(e) => setNewProjectHourlyRate(e.target.value)} placeholder="R$/hora (opcional)" />
           <div className="flex gap-2">
             <Button
-              variant={newProjectType === 'sap' ? 'default' : 'secondary'}
-              onClick={() => setNewProjectType('sap')}
+              variant={newProjectType === 'projeto' ? 'default' : 'secondary'}
+              onClick={() => setNewProjectType('projeto')}
               className="flex-1"
             >
-              SAP
+              Projeto
             </Button>
             <Button
-              variant={newProjectType === 'general' ? 'default' : 'secondary'}
-              onClick={() => setNewProjectType('general')}
+              variant={newProjectType === 'tarefa' ? 'default' : 'secondary'}
+              onClick={() => setNewProjectType('tarefa')}
               className="flex-1"
             >
-              Geral
+              Tarefa
             </Button>
           </div>
           <Button disabled={creatingProject || !newProjectName.trim()} onClick={createNewProject}>
@@ -171,6 +173,7 @@ export default function ProjectsSection(props: Props) {
                 <div className="flex gap-2">
                   <Button
                     type="button"
+                    size="sm"
                     variant="secondary"
                     onClick={(e) => {
                       e.preventDefault();
@@ -183,7 +186,8 @@ export default function ProjectsSection(props: Props) {
                   </Button>
                   <Button
                     type="button"
-                    variant="danger"
+                    size="sm"
+                    variant="destructive"
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -250,7 +254,7 @@ export default function ProjectsSection(props: Props) {
               />
               <Input
                 value={newCardColor}
-                onChange={(e) => setNewCardColor(e.target.value)}
+                onChange={(e) => setNewCardColor(e.target.value as CardColor)}
                 placeholder="Cor (ex: #22c55e)"
               />
               <Button
@@ -321,11 +325,12 @@ function KanbanColumnView({
                 {card.description && <div className="mt-1 text-xs text-white/60">{card.description}</div>}
               </div>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => onOpen(card)}>
+                <Button size="sm" variant="secondary" onClick={() => onOpen(card)}>
                   Abrir
                 </Button>
                 <Button
-                  variant="danger"
+                  size="sm"
+                  variant="destructive"
                   onClick={() => onDelete(column.id, card.id)}
                 >
                   Excluir

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Skeleton, Textarea, cn } from '../components/ui';
 import {
   acceptInvite,
@@ -33,7 +33,6 @@ import {
   type DriveItem,
   type Project,
   type ProjectBoard,
-  type KanbanCard,
   type ShareConnection,
   type ShareInvite,
   type VaultEntry,
@@ -166,6 +165,22 @@ function EntryActions({
       push('Não foi possível copiar', 'error');
     }
   }
+
+  async function deleteNote(id: string) {
+    if (!confirm('Excluir esta nota?')) return;
+    try {
+      const res = await deleteNoteItem(id);
+      if (res.ok) {
+        setNoteItems((prev) => prev.filter((n) => n.id !== id));
+        push('Nota excluída', 'success');
+      } else {
+        push('Erro ao excluir nota', 'error');
+      }
+    } catch {
+      push('Erro ao excluir nota', 'error');
+    }
+  }
+
 
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
@@ -389,33 +404,6 @@ export default function Dashboard({
 }) {
   const { push } = useToast();
 
-  // Clipboard helper shared across the dashboard (Notes, Projects, Vault, modals)
-  const copyText = useCallback(
-    async (text: string) => {
-      const value = (text ?? '').toString();
-      try {
-        if (navigator?.clipboard?.writeText) {
-          await navigator.clipboard.writeText(value);
-        } else {
-          // Fallback for older browsers / restricted contexts
-          const ta = document.createElement('textarea');
-          ta.value = value;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.focus();
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-        }
-        push('Copiado ✅', 'success');
-      } catch {
-        push('Não foi possível copiar', 'error');
-      }
-    },
-    [push]
-  );
-
   const [section, setSection] = useState<Section>('vault');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -555,16 +543,12 @@ export default function Dashboard({
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [newProjectType, setNewProjectType] = useState<'sap' | 'general'>('sap');
   const [newProjectHourlyRate, setNewProjectHourlyRate] = useState('');
-  const [creatingProject, setCreatingProject] = useState(false);
 
   // Project sharing (owner-only)
   const [projectShareModalOpen, setProjectShareModalOpen] = useState(false);
   const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
   const [projectShareEmails, setProjectShareEmails] = useState('');
   const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<string[]>([]);
-
-  // Kanban: new column UI
-  const [newColumnTitle, setNewColumnTitle] = useState('');
   const [newCardTitle, setNewCardTitle] = useState('');
   const [newCardDesc, setNewCardDesc] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
@@ -600,21 +584,6 @@ export default function Dashboard({
   const [notesDirty, setNotesDirty] = useState(false);
   const [notesUpdatedAt, setNotesUpdatedAt] = useState<string | null>(null);
   const [noteItems, setNoteItems] = useState<NoteItem[]>([]);
-
-  async function deleteNote(id: string) {
-    if (!confirm('Excluir esta nota?')) return;
-    try {
-      const res: any = await deleteNoteItem(id);
-      if (res?.ok) {
-        setNoteItems((prev) => prev.filter((n) => n.id !== id));
-        push('Nota excluída', 'success');
-      } else {
-        push('Erro ao excluir nota', 'error');
-      }
-    } catch {
-      push('Erro ao excluir nota', 'error');
-    }
-  }
   const [noteQuery, setNoteQuery] = useState('');
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
@@ -867,10 +836,8 @@ export default function Dashboard({
           ip: form.ip || null,
           email: form.email || null,
           connectionData: metaPayload ?? (form.connectionData || null),
-          sapConnection: form.sapConnection || null,
-          sapJson: sapPayload,
-          vpnConnection: form.vpnConnection || null,
-          vpnJson: vpnPayload,
+          sapConnection: sapPayload ?? (form.sapConnection || null),
+          vpnConnection: vpnPayload ?? (form.vpnConnection || null),
           notes: form.notes || null,
         });
         push('Senha atualizada ✅', 'success');
@@ -884,10 +851,8 @@ export default function Dashboard({
           ip: form.ip || null,
           email: form.email || null,
           connectionData: metaPayload ?? (form.connectionData || null),
-          sapConnection: form.sapConnection || null,
-          sapJson: sapPayload,
-          vpnConnection: form.vpnConnection || null,
-          vpnJson: vpnPayload,
+          sapConnection: sapPayload ?? (form.sapConnection || null),
+          vpnConnection: vpnPayload ?? (form.vpnConnection || null),
           notes: form.notes || null,
           ownerEmail: null,
           ownerUid: undefined,
@@ -1011,7 +976,6 @@ export default function Dashboard({
   async function createNewProject() {
     const name = newProjectName.trim();
     if (!name) return push('Informe o nome do projeto', 'error');
-    setCreatingProject(true);
     try {
       const rate = parseFloat(String(newProjectHourlyRate).replace(',', '.'));
       await createProject(name, newProjectDesc.trim() || null, newProjectType, isFinite(rate) ? rate : null);
@@ -1030,8 +994,6 @@ export default function Dashboard({
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Falha ao criar projeto';
       push(msg, 'error');
-    } finally {
-      setCreatingProject(false);
     }
   }
 
@@ -1105,20 +1067,6 @@ export default function Dashboard({
     await saveBoard(next);
   }
 
-  async function addKanbanColumn() {
-    if (!projectBoard) return;
-    const title = newColumnTitle.trim();
-    if (!title) return push('Informe o nome da coluna', 'error');
-
-    const id = `col_${Math.random().toString(36).slice(2, 10)}`;
-    const next: ProjectBoard = {
-      ...projectBoard,
-      columns: [...projectBoard.columns, { id, title }],
-    };
-    setNewColumnTitle('');
-    await saveBoard(next);
-  }
-
   async function moveKanbanCard(cardId: string, columnId: string) {
     if (!projectBoard) return;
     const now = new Date().toISOString();
@@ -1136,15 +1084,6 @@ export default function Dashboard({
     if (!projectBoard) return;
     const next: ProjectBoard = { ...projectBoard, cards: projectBoard.cards.filter((c) => c.id !== cardId) };
     await saveBoard(normalizeOrders(next));
-  }
-
-  // Adapters for the modular ProjectsSection (expects signatures with columnId)
-  async function deleteKanbanCardUI(_columnId: string, cardId: string) {
-    return deleteKanbanCard(cardId);
-  }
-
-  async function moveKanbanCardUI(_fromColumnId: string, toColumnId: string, cardId: string) {
-    return moveKanbanCard(cardId, toColumnId);
   }
 
   function dropCardToColumn(cardId: string, columnId: string, beforeCardId?: string) {
@@ -1255,6 +1194,11 @@ export default function Dashboard({
     push('Card atualizado ✅', 'success');
   }
 
+  async function saveCardEdits() {
+    await persistCardEdits();
+    setCardModalOpen(false);
+  }
+
   async function addCardComment() {
     if (!projectBoard || !activeProjectId || !activeCard) return;
     const text = newCardComment.trim();
@@ -1329,20 +1273,6 @@ export default function Dashboard({
       <span className="font-medium">{label}</span>
     </button>
   );
-
-  // UI-friendly board: attach cards to each column (ProjectsSection expects column.cards)
-  const projectBoardUI = useMemo(() => {
-    if (!projectBoard) return null as any;
-    const byCol: Record<string, KanbanCard[]> = {};
-    for (const c of projectBoard.cards || []) {
-      (byCol[c.columnId] = byCol[c.columnId] || []).push(c);
-    }
-    const cols = (projectBoard.columns || []).map((col: any) => ({
-      ...col,
-      cards: (byCol[col.id] || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    }));
-    return { ...projectBoard, columns: cols };
-  }, [projectBoard]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-slate-50 text-zinc-900">
@@ -1632,8 +1562,8 @@ export default function Dashboard({
                 creatingProject={creatingProject}
                 removeProject={removeProject}
                 setProjectShareTarget={setProjectShareTarget}
-                setProjectShareOpen={setProjectShareModalOpen}
-                projectBoard={projectBoardUI}
+                setProjectShareOpen={setProjectShareOpen}
+                projectBoard={projectBoard}
                 projectBoardLoading={projectBoardLoading}
                 newColumnTitle={newColumnTitle}
                 setNewColumnTitle={setNewColumnTitle}
@@ -1645,8 +1575,8 @@ export default function Dashboard({
                 newCardColor={newCardColor}
                 setNewCardColor={setNewCardColor}
                 addKanbanCard={addKanbanCard}
-                deleteKanbanCard={deleteKanbanCardUI}
-                moveKanbanCard={moveKanbanCardUI}
+                deleteKanbanCard={deleteKanbanCard}
+                moveKanbanCard={moveKanbanCard}
                 openCard={openCard}
               />
             )}
@@ -1852,14 +1782,11 @@ export default function Dashboard({
                 const content = noteForm.content;
                 try {
                   if (editingNote) {
-                    await updateNoteItem(editingNote.id, { title, content });
-                    const now = new Date().toISOString();
-                    setNoteItems((p) => p.map((x) => (x.id === editingNote.id ? { ...x, title, content, updatedAt: now } : x)));
+                    const r = await updateNoteItem(editingNote.id, { title, content });
+                    setNoteItems((p) => p.map((x) => (x.id === editingNote.id ? r.item : x)));
                   } else {
-                    const r = await createNoteItem(title, content);
-                    const now = new Date().toISOString();
-                    const newItem: NoteItem = { id: r.id, title, content, createdAt: now, updatedAt: now };
-                    setNoteItems((p) => [newItem, ...p]);
+                    const r = await createNoteItem({ title, content });
+                    setNoteItems((p) => [r.item, ...p]);
                   }
                   setNoteModalOpen(false);
                 } catch {
@@ -1881,8 +1808,8 @@ export default function Dashboard({
       >
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-zinc-600">Escopo</label>
-            <select
+            <label htmlFor="adv-scope" className="text-xs font-medium text-zinc-600">Escopo</label>
+            <select id="adv-scope" aria-label="Escopo" title="Escopo"
               className="mt-1 w-full rounded-xl border border-zinc-200/70 bg-white px-3 py-2 text-sm"
               value={advFilters.scope}
               onChange={(e) => setAdvFilters((p) => ({ ...p, scope: e.target.value as any }))}
@@ -2253,8 +2180,8 @@ export default function Dashboard({
               </div>
 
               <div>
-                <label className="text-xs font-medium text-zinc-600">Prioridade</label>
-                <select
+                <label htmlFor="card-priority" className="text-xs font-medium text-zinc-600">Prioridade</label>
+                <select id="card-priority" aria-label="Prioridade" title="Prioridade"
                   value={(cardEdit as any).priority}
                   onChange={(e) => setCardEdit((p: any) => ({ ...p, priority: e.target.value }))}
                   className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
@@ -2313,8 +2240,8 @@ export default function Dashboard({
               </div>
 
               <div className="sm:col-span-2">
-                <label className="text-xs font-medium text-zinc-600">Coluna</label>
-                <select
+                <label htmlFor="card-column" className="text-xs font-medium text-zinc-600">Coluna</label>
+                <select id="card-column" aria-label="Coluna" title="Coluna"
                   value={cardEdit.columnId}
                   onChange={(e) => setCardEdit((p: any) => ({ ...p, columnId: e.target.value }))}
                   className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
