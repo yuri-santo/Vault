@@ -326,13 +326,17 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
   // Get project board
   r.get('/:id/board', auth, async (req: AuthedRequest, res) => {
     const uid = req.user!.uid;
+    const emailLower = String(req.user?.email ?? '').toLowerCase();
     const id = req.params.id;
     const ref = col.doc(id);
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: 'Not found' });
     const data = snap.data() as any;
     const isOwner = (data?.ownerUid ?? null) === uid;
-    const canEdit = isOwner || (Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid));
+    const canEdit =
+      isOwner ||
+      (Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid)) ||
+      (emailLower && Array.isArray(data?.sharedEmails) && data.sharedEmails.includes(emailLower));
     if (!canEdit) return res.status(403).json({ error: 'Forbidden' });
 
     const projectType = (data?.projectType === 'general' ? 'general' : 'sap') as 'sap' | 'general';
@@ -343,13 +347,17 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
   // Save project board
   r.put('/:id/board', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
     const uid = req.user!.uid;
+    const emailLower = String(req.user?.email ?? '').toLowerCase();
     const id = req.params.id;
     const ref = col.doc(id);
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: 'Not found' });
     const data = snap.data() as any;
     const isOwner = (data?.ownerUid ?? null) === uid;
-    const canEdit = isOwner || (Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid));
+    const canEdit =
+      isOwner ||
+      (Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid)) ||
+      (emailLower && Array.isArray(data?.sharedEmails) && data.sharedEmails.includes(emailLower));
     if (!canEdit) return res.status(403).json({ error: 'Forbidden' });
 
     const incoming = req.body?.board;

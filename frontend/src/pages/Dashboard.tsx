@@ -1635,10 +1635,10 @@ export default function Dashboard({
                     </div>
                   </div>
                   <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_260px] gap-3 px-5 py-3 border-b border-zinc-200/70 text-[11px] uppercase tracking-wide text-zinc-500">
-                    <div>Serviço / Nome</div>
+                    <div>Serviço {'/'} Nome</div>
                     <div>Usuário</div>
                     <div>E-mail</div>
-                    <div>IP / Host</div>
+                    <div>IP {'/'} Host</div>
                     <div>Senha</div>
                     <div className="text-right pr-1">Ações</div>
                   </div>
@@ -1720,7 +1720,7 @@ export default function Dashboard({
                                 </div>
 
                                 <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
-                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">IP / Host</div>
+                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">IP {'/'} Host</div>
                                   <div className="text-sm text-zinc-800 break-all mt-1">{e.ip || '—'}</div>
                                 </div>
 
@@ -2060,7 +2060,7 @@ export default function Dashboard({
                     <Icon name="projects" className="h-5 w-5 text-violet-600" />
                     <div>
                       <div className="font-semibold">Projetos & Kanban</div>
-                      <div className="text-xs text-zinc-500">Organize tarefas, dúvidas e notas técnicas em colunas (estilo Jira/Kanban).</div>
+                      <div className="text-xs text-zinc-500">Organize tarefas, dúvidas e notas técnicas em colunas (estilo Jira{'/'}Kanban).</div>
                     </div>
                   </div>
                 </div>
@@ -2629,10 +2629,10 @@ export default function Dashboard({
               className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
             >
               <option value="generic">Genérica</option>
-              <option value="website">Site / Login Web</option>
+              <option value="website">Site {'/'} Login Web</option>
               <option value="sap">Conexão SAP</option>
               <option value="vpn">Conexão VPN</option>
-              <option value="json">JSON / ENV / App</option>
+              <option value="json">JSON {'/'} ENV {'/'} App</option>
             </select>
             <div className="mt-1 text-[11px] text-zinc-500">
               O formulário se adapta ao tipo escolhido para ficar mais clean.
@@ -2640,7 +2640,7 @@ export default function Dashboard({
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Serviço / Nome</label>
+            <label className="text-xs font-medium text-zinc-600">Serviço {'/'} Nome</label>
             <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ex.: AWS Console" />
           </div>
           {(['generic','website'].includes((form as any).entryType)) && (
@@ -2683,7 +2683,7 @@ export default function Dashboard({
 	        )}
           {((form as any).entryType === 'generic') && (
           <div>
-            <label className="text-xs font-medium text-zinc-600">IP / Host</label>
+            <label className="text-xs font-medium text-zinc-600">IP {'/'} Host</label>
             <Input value={form.ip} onChange={(e) => setForm((p) => ({ ...p, ip: e.target.value }))} placeholder="Ex.: 10.0.0.10" />
           </div>
           )}
@@ -2802,7 +2802,7 @@ export default function Dashboard({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="text-[11px] text-zinc-500">Server / Gateway</label>
+                  <label className="text-[11px] text-zinc-500">Server {'/'} Gateway</label>
                   <div className="flex gap-2">
                     <Input value={vpnConn.server} onChange={(e) => setVpnConn((p) => ({ ...p, server: e.target.value }))} placeholder="ex.: vpn.empresa.com" />
                     <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.server)} disabled={!vpnConn.server.trim()} title="Copiar">
@@ -2842,7 +2842,7 @@ export default function Dashboard({
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-zinc-500">Domain/Realm</label>
+                  <label className="text-[11px] text-zinc-500">Domain {'/'} Realm</label>
                   <div className="flex gap-2">
                     <Input value={vpnConn.domain} onChange={(e) => setVpnConn((p) => ({ ...p, domain: e.target.value }))} placeholder="ex.: AD" />
                     <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.domain)} disabled={!vpnConn.domain.trim()} title="Copiar">
@@ -2852,7 +2852,7 @@ export default function Dashboard({
                 </div>
 
                 <div className="sm:col-span-3">
-                  <label className="text-[11px] text-zinc-500">Profile / Observações</label>
+                  <label className="text-[11px] text-zinc-500">Profile {'/'} Observações</label>
                   <div className="flex gap-2">
                     <Textarea value={vpnConn.profile} onChange={(e) => setVpnConn((p) => ({ ...p, profile: e.target.value }))} rows={2} placeholder="ex.: profile name / split tunneling / etc" />
                     <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.profile)} disabled={!vpnConn.profile.trim()} title="Copiar">
@@ -2872,7 +2872,7 @@ export default function Dashboard({
           {((form as any).entryType !== 'website') && (
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between gap-3">
-                <label className="text-xs font-medium text-zinc-600">Dados gerais / JSON (env, configs, apps)</label>
+                <label className="text-xs font-medium text-zinc-600">Dados gerais {'/'} JSON (env, configs, apps)</label>
                 <Button type="button" variant="secondary" onClick={() => copyText(metaJsonText)} disabled={!metaJsonText.trim()} title="Copiar">
                   <Icon name="copy" className="h-4 w-4" />
                 </Button>
@@ -3008,7 +3008,7 @@ export default function Dashboard({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Row label="Usuário" value={ve.username} />
                   <Row label="E-mail" value={ve.email} />
-                  <Row label="IP / Host" value={ve.ip} mono />
+                  <Row label={`IP ${'/'} Host`} value={ve.ip} mono />
                   <Row label="URL" value={url} openUrl copyable={!!url} />
                 </div>
 
@@ -3244,7 +3244,7 @@ export default function Dashboard({
         }}
       >
         <div className="text-sm text-zinc-600">
-          Escolha quem vai acompanhar/editar o Kanban. Colaboradores conseguem <b>criar/editar/mover cards</b>, mas <b>não</b> conseguem excluir o projeto nem compartilhar com outras pessoas.
+          Escolha quem vai acompanhar{'/'}editar o Kanban. Colaboradores conseguem <b>criar{'/'}editar{'/'}mover cards</b>, mas <b>não</b> conseguem excluir o projeto nem compartilhar com outras pessoas.
         </div>
 
         <div className="mt-4 space-y-2">
