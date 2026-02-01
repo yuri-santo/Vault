@@ -190,6 +190,18 @@ function maskPassword(p: string) {
   return '•'.repeat(Math.min(Math.max(p.length, 8), 14));
 }
 
+// Deterministic small rotation for a "post-it" look.
+// We keep this function outside the component to avoid TDZ/hoisting issues.
+function postitAngle(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  // Map hash to a small angle between -2.6 and +2.6 degrees
+  const n = Math.abs(h % 1000) / 1000; // 0..1
+  const angle = (n * 5.2) - 2.6;
+  // Reduce micro jitter
+  return Math.round(angle * 10) / 10;
+}
+
 type Section = 'vault' | 'sharing' | 'drive' | 'projects' | 'notes';
 
 function useOutsideClick(ref: React.RefObject<HTMLElement>, handler: () => void) {
