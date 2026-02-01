@@ -40,151 +40,10 @@ import {
 } from '../lib/api';
 import { Modal } from '../components/modal';
 import { useToast } from '../components/toast';
+import { Icon } from './dashboard/Icons';
+import DriveSection from './dashboard/DriveSection';
+import NotesSection from './dashboard/NotesSection';
 
-function Icon({ name, className }: { name: 'shield' | 'lock' | 'share' | 'drive' | 'projects' | 'folder' | 'file' | 'note' | 'search' | 'filter' | 'dots' | 'copy' | 'eye' | 'edit' | 'trash' | 'plus' | 'externalLink' | 'menu' | 'x' | 'info'; className?: string }) {
-  const common = cn('inline-block', className);
-  // Tiny inline icons (no deps)
-  switch (name) {
-    case 'shield':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 2l8 4v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4z" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'lock':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M6.5 11h11A2.5 2.5 0 0 1 20 13.5v6A2.5 2.5 0 0 1 17.5 22h-11A2.5 2.5 0 0 1 4 19.5v-6A2.5 2.5 0 0 1 6.5 11z" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'share':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M16 6a2.5 2.5 0 1 0 0 .01V6zM6 12a2.5 2.5 0 1 0 0 .01V12zM16 18a2.5 2.5 0 1 0 0 .01V18z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M8.2 11.2l5.6-3.2M8.2 12.8l5.6 3.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'drive':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M8 4h8l4 7-4 7H8L4 11 8 4z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M8 4l4 7h8" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M4 11h8l4 7" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'projects':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 7a2 2 0 0 1 2-2h5v14H6a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M11 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7V5z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M7 9h2M7 12h2M7 15h2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'folder':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'file':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M7 3h7l3 3v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'note':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M7 3h10a2 2 0 0 1 2 2v14l-4-2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M8 8h8M8 12h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'search':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'filter':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M3 5h18l-7 8v6l-4-2v-4L3 5z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-        </svg>
-      );
-    case 'dots':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 6.6a1.2 1.2 0 1 0 0 .01V6.6zM12 12a1.2 1.2 0 1 0 0 .01V12zM12 17.4a1.2 1.2 0 1 0 0 .01v-.01z" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'externalLink':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M14 5h5v5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M10 14L19 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    case 'copy':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M9 9h10v12H9V9z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'eye':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'edit':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-.2-.2a2 2 0 0 0-2.8 0L5 17v3z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M13.5 6.5l4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'trash':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 7h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <path d="M10 3h4l1 2H9l1-2z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M7 7l1 14h8l1-14" stroke="currentColor" strokeWidth="1.7" />
-        </svg>
-      );
-    case 'plus':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'menu':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'x':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      );
-    case 'info':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M12 10v7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          <path d="M12 7h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        </svg>
-      );
-  }
-}
 
 function maskPassword(p: string) {
   return '•'.repeat(Math.min(Math.max(p.length, 8), 14));
@@ -294,35 +153,29 @@ function EntryActions({
   useOutsideClick(boxRef, () => setOpen(false));
   const { push } = useToast();
 
-
-async function copyText(text: string) {
-  const value = (text ?? '').toString();
-  if (!value.trim()) {
-    push('Nada para copiar.', 'info');
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(value);
-    push('Copiado para a área de transferência!', 'success');
-  } catch {
-    // Fallback antigo
+  async function copyText(text: string) {
     try {
-      const el = document.createElement('textarea');
-      el.value = value;
-      el.style.position = 'fixed';
-      el.style.left = '-9999px';
-      document.body.appendChild(el);
-      el.focus();
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      push('Copiado para a área de transferência!', 'success');
+      await navigator.clipboard.writeText(text ?? '');
+      push('Copiado ✅', 'success');
     } catch {
-      push('Não foi possível copiar.', 'error');
+      push('Não foi possível copiar', 'error');
     }
   }
-}
+
+  async function deleteNote(id: string) {
+    if (!confirm('Excluir esta nota?')) return;
+    try {
+      const res = await deleteNoteItem(id);
+      if (res.ok) {
+        setNoteItems((prev) => prev.filter((n) => n.id !== id));
+        push('Nota excluída', 'success');
+      } else {
+        push('Erro ao excluir nota', 'error');
+      }
+    } catch {
+      push('Erro ao excluir nota', 'error');
+    }
+  }
 
 
   async function copy(text: string, label: string) {
@@ -428,17 +281,15 @@ async function copyText(text: string) {
 
 function IconActionButton({
   title,
-  icon,
   onClick,
   disabled,
   children,
   danger,
 }: {
   title: string;
-  icon?: IconName;
   onClick?: () => void;
   disabled?: boolean;
-  children?: React.ReactNode;
+  children: React.ReactNode;
   danger?: boolean;
 }) {
   return (
@@ -454,7 +305,7 @@ function IconActionButton({
         danger ? 'text-rose-600 hover:bg-rose-50' : 'text-zinc-700'
       )}
     >
-      {children ?? (icon ? <Icon name={icon} className="h-4 w-4" /> : null)}
+      {children}
     </button>
   );
 }
@@ -1326,12 +1177,6 @@ export default function Dashboard({
     if (cardEdit.approved && projectBoard.columns.some((c) => c.id === 'approved')) {
       columnId = 'approved';
     }
-
-
-  async function saveCardEdits() {
-    await persistCardEdits();
-    setCardModalOpen(false);
-  }
     nextCard.columnId = columnId;
     if (cardEdit.approved && !nextCard.approvedAt) nextCard.approvedAt = now;
 
@@ -1931,741 +1776,95 @@ export default function Dashboard({
             )}
 
             {/* Drive */}
-            {section === 'drive' ? (
-              <div className="mt-6 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Icon name="drive" className="h-5 w-5 text-violet-600" />
-                    <div>
-                      <div className="font-semibold">Drive (Emergencial)</div>
-                      <div className="text-xs text-zinc-500">Armazenamento temporário vinculado à sua pasta.</div>
-                    </div>
-                  </div>
-
-                  {driveOpenUrl && (
-                    <a
-                      href={driveOpenUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm text-violet-700 hover:text-violet-800 font-medium"
-                    >
-                      Abrir pasta
-                    </a>
-                  )}
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-                  <Input value={driveFolder} onChange={(e) => setDriveFolderState(e.target.value)} placeholder="ID da pasta ou Link" />
-                  <Button onClick={saveDriveFolder}>Salvar</Button>
-                </div>
-
-                {!driveEnabled && (
-                  <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-2xl p-3">
-                    Drive não está habilitado no servidor. Configure <b>GOOGLE_DRIVE_API_KEY</b>.
-                  </div>
-                )}
-
-                <div className="mt-5">
-                  <div className="text-xs font-semibold text-zinc-600">Arquivos na pasta</div>
-                  <div className="mt-2 rounded-2xl border border-zinc-200/70 bg-white overflow-hidden">
-                    {loading ? (
-                      <div className="p-4 space-y-3">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    ) : driveNeedsSetup ? (
-                      <div className="p-4 text-sm text-zinc-500">Defina uma pasta para começar.</div>
-                    ) : driveFiles.length === 0 ? (
-                      <div className="p-4 text-sm text-zinc-500">Nenhum arquivo encontrado com o prefixo do Vault.</div>
-                    ) : (
-                      <div className="divide-y divide-zinc-100">
-                        {driveFiles.slice(0, 30).map((f) => (
-                          <div key={f.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">{f.name}</div>
-                              <div className="text-xs text-zinc-500">{f.modifiedTime ? new Date(f.modifiedTime).toLocaleString() : ''}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {f.webViewLink && (
-                                <a
-                                  href={f.webViewLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm text-violet-700 hover:text-violet-800"
-                                >
-                                  Ver
-                                </a>
-                              )}
-                              <Button variant="secondary" onClick={() => removeDriveFile(f.id)}>
-                                Remover
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-3 text-xs text-zinc-500">
-                    <b>Remover</b> aqui apenas oculta o arquivo da sua lista (não apaga do Drive). Para organizar ou excluir de verdade,
-                    use <b>Abrir pasta</b>.
-                  </div>
-                </div>
-
-                <div className="mt-8">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <div className="text-xs font-semibold text-zinc-600">Explorer (estilo Finder)</div>
-                      <div className="text-xs text-zinc-500">Navegue pelas pastas do link salvo (pastas e arquivos).</div>
-                    </div>
-                    <Button variant="secondary" onClick={openDriveRoot} disabled={driveExplorerLoading || driveNeedsSetup}>
-                      Abrir raiz
-                    </Button>
-                  </div>
-
-                  <div className="mt-2 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-4">
-                    {driveNeedsSetup ? (
-                      <div className="text-sm text-zinc-500">
-                        Defina uma pasta acima e clique em <b>Abrir raiz</b>.
-                      </div>
-                    ) : driveExplorerLoading ? (
-                      <div className="space-y-3">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">
-                          <button type="button" className="hover:text-violet-700" onClick={() => goDriveBreadcrumb(-1)}>
-                            Raiz
-                          </button>
-                          {drivePath.map((p, idx) => (
-                            <span key={p.id} className="flex items-center gap-2">
-                              <span className="opacity-50">›</span>
-                              <button type="button" className="hover:text-violet-700" onClick={() => goDriveBreadcrumb(idx)}>
-                                {p.name}
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-
-                        <div className="mt-3 divide-y divide-zinc-100">
-                          {driveItems.length === 0 ? (
-                            <div className="py-8 text-sm text-zinc-500">Pasta vazia.</div>
-                          ) : (
-                            driveItems.map((it) => (
-                              <div key={it.id} className="py-3 flex items-center justify-between gap-3">
-                                <div className="min-w-0 flex items-center gap-3">
-                                  <div className="h-9 w-9 rounded-2xl border border-zinc-200/70 bg-white flex items-center justify-center">
-                                    <Icon name={it.isFolder ? 'folder' : 'file'} className="h-4 w-4 text-violet-600" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-medium truncate">{it.name}</div>
-                                    <div className="text-xs text-zinc-500 truncate">
-                                      {it.isFolder ? 'Pasta' : 'Arquivo'}
-                                      {it.modifiedTime ? ` • ${new Date(it.modifiedTime).toLocaleString()}` : ''}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  {it.isFolder ? (
-                                    <Button variant="secondary" onClick={() => enterDriveFolder(it)}>
-                                      Abrir
-                                    </Button>
-                                  ) : it.webViewLink ? (
-                                    <a
-                                      href={it.webViewLink}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-sm text-violet-700 hover:text-violet-800 font-medium"
-                                    >
-                                      Visualizar
-                                    </a>
-                                  ) : null}
-
-                                  <Button
-                                    variant="secondary"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(it.webViewLink || '').then(() => push('Link copiado', 'success'));
-                                    }}
-                                    disabled={!it.webViewLink}
-                                  >
-                                    Copiar link
-                                  </Button>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            {section === 'drive' && (
+              <DriveSection
+                loading={loading}
+                driveOpenUrl={driveOpenUrl}
+                driveFolder={driveFolder}
+                setDriveFolderState={setDriveFolderState}
+                saveDriveFolder={saveDriveFolder}
+                driveEnabled={driveEnabled}
+                driveNeedsSetup={driveNeedsSetup}
+                driveFiles={driveFiles}
+                removeDriveFile={removeDriveFile}
+                driveExplorerLoading={driveExplorerLoading}
+                openDriveRoot={openDriveRoot}
+                drivePath={drivePath}
+                goDriveBreadcrumb={goDriveBreadcrumb}
+                driveItems={driveItems}
+                enterDriveFolder={enterDriveFolder}
+                pushToast={push}
+              />
+            )}
 
             {/* Projects / Kanban */}
             {section === 'projects' && (
-              <div className="mt-6 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-2">
-                    <Icon name="projects" className="h-5 w-5 text-violet-600" />
-                    <div>
-                      <div className="font-semibold">Projetos & Kanban</div>
-                      <div className="text-xs text-zinc-500">Organize tarefas, dúvidas e notas técnicas em colunas (estilo Jira/Kanban).</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-col gap-4">
-                  <div className="rounded-3xl border border-zinc-200/70 bg-white p-4">
-                    <div className="text-xs font-semibold text-zinc-600">Seus projetos</div>
-                    <div className="mt-3 space-y-2">
-                      <div className="flex gap-2">
-                        <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} placeholder="Nome do projeto" />
-                        <Button onClick={createNewProject}>Criar</Button>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div className="sm:col-span-2">
-                          <select
-                            value={newProjectType}
-                            onChange={(e) => setNewProjectType(e.target.value as any)}
-                            className="w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
-                            title="Tipo do projeto"
-                          >
-                            <option value="sap">Projeto SAP</option>
-                            <option value="general">Projeto Geral</option>
-                          </select>
-                        </div>
-                        <Input
-                          value={newProjectHourlyRate}
-                          onChange={(e) => setNewProjectHourlyRate(e.target.value)}
-                          placeholder="R$/hora (opcional)"
-                          title="Valor hora"
-                        />
-                      </div>
-                      <Textarea value={newProjectDesc} onChange={(e) => setNewProjectDesc(e.target.value)} rows={2} placeholder="Descrição (opcional)" />
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                      {projects.length === 0 ? (
-                        <div className="text-sm text-zinc-500">Crie um projeto para começar.</div>
-                      ) : (
-                        projects.map((p) => (
-                          <div
-                            key={p.id}
-                            className={cn(
-                              'flex items-center justify-between gap-2 rounded-2xl border border-zinc-200/70 px-3 py-2',
-                              activeProjectId === p.id ? 'bg-violet-50 border-violet-200' : 'bg-white'
-                            )}
-                          >
-                            <button type="button" className="min-w-0 text-left flex-1" onClick={() => setActiveProjectId(p.id)}>
-                              <div className="text-sm font-medium truncate">{p.name}</div>
-                              <div className="text-xs text-zinc-500 truncate">
-                                Atualizado: {new Date(p.updatedAt).toLocaleDateString()}
-                                {!p.isOwner && p.ownerEmail ? ` • Compartilhado por ${p.ownerEmail}` : ''}
-                              </div>
-                            </button>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {p.isOwner ? (
-                                <button
-                                  type="button"
-                                  className="text-zinc-400 hover:text-violet-700"
-                                  onClick={() => {
-                                    setProjectShareTarget(p);
-                                    setProjectShareEmails('');
-                                    setProjectShareSelectedUids([]);
-                                    setProjectShareModalOpen(true);
-                                  }}
-                                  title="Compartilhar"
-                                >
-                                  <Icon name="share" className="h-4 w-4" />
-                                </button>
-                              ) : null}
-                              {p.isOwner ? (
-                                <button
-                                  type="button"
-                                  className="text-zinc-400 hover:text-red-600"
-                                  onClick={() => removeProject(p.id)}
-                                  title="Excluir"
-                                >
-                                  <Icon name="trash" className="h-4 w-4" />
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="mt-4 text-xs text-zinc-500">
-                      Dica: use o <b>Drive Explorer</b> para guardar docs do projeto e copie links com 1 clique.
-                    </div>
-                  </div>
-
-                  {boardFullscreen && (
-                    <div
-                      className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-                      onClick={() => setBoardFullscreen(false)}
-                    />
-                  )}
-                  <div className={cn(boardFullscreen ? 'fixed inset-0 z-50 p-3 sm:p-4' : '')}>
-                    <div
-                      className={cn(
-                        'rounded-3xl border border-zinc-200/70 bg-white p-4 overflow-x-auto',
-                        boardFullscreen ? 'h-full w-full flex flex-col overflow-hidden shadow-xl' : ''
-                      )}
-                    >
-                    {!activeProjectId ? (
-                      <div className="text-sm text-zinc-500">Selecione um projeto.</div>
-                    ) : projectBoardLoading ? (
-                      <div className="space-y-3">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    ) : !projectBoard ? (
-                      <div className="text-sm text-zinc-500">Carregando board...</div>
-                    ) : (
-                      <div className="rounded-3xl border border-zinc-200/70 bg-white/60 backdrop-blur shadow-sm">
-                        <div className="flex items-center justify-between gap-3 p-4 border-b border-zinc-200/60">
-                          <div className="min-w-0">
-                            <div className="font-semibold truncate">Jira completo (analógico)</div>
-                            {activeProject && !activeProject.isOwner && activeProject.ownerEmail ? (
-                              <div className="text-xs text-zinc-500 truncate">Compartilhado por {activeProject.ownerEmail}</div>
-                            ) : (
-                              <div className="text-xs text-zinc-500 truncate">Arraste cards entre colunas • Post-its • Zoom</div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2 flex-wrap justify-end">
-                            {(activeProject?.canEdit ?? true) && (
-                              <>
-                                <Button
-                                  variant="secondary"
-                                  onClick={() => {
-                                    setNewCardTitle('🗒️ Post-it');
-                                    setNewCardDesc('');
-                                    setNewCardType('note');
-                                    setNewCardColor('yellow');
-                                    const col = projectBoard.columns[0]?.id ?? 'backlog';
-                                    setNewCardColumnId(col);
-                                    addKanbanCard(col);
-                                  }}
-                                >
-                                  + Post-it
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  onClick={() => {
-                                    setNewCardTitle('Nova tarefa');
-                                    setNewCardDesc('');
-                                    setNewCardType('task');
-                                    setNewCardColor('white');
-                                    const col = projectBoard.columns[0]?.id ?? 'backlog';
-                                    setNewCardColumnId(col);
-                                    addKanbanCard(col);
-                                  }}
-                                >
-                                  + Tarefa
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="secondary"
-                              onClick={() => setBoardZoom((z) => Math.max(0.6, Number((z - 0.1).toFixed(2))))}
-                              title="Zoom -"
-                            >
-                              -
-                            </Button>
-                            <div className="text-xs text-zinc-600 w-14 text-center">{Math.round(boardZoom * 100)}%</div>
-                            <Button
-                              variant="secondary"
-                              onClick={() => setBoardZoom((z) => Math.min(1.6, Number((z + 0.1).toFixed(2))))}
-                              title="Zoom +"
-                            >
-                              +
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                const wrap = boardWrapRef.current;
-                                if (!wrap) return;
-                                const colW = 420;
-                                const gap = 24;
-                                const pad = 48;
-                                const total = projectBoard.columns.length * colW + Math.max(0, projectBoard.columns.length - 1) * gap + pad * 2;
-                                const z = Math.min(1.3, Math.max(0.6, Number((wrap.clientWidth / total).toFixed(2))));
-                                setBoardZoom(z);
-                              }}
-                              title="Ajustar ao espaço"
-                            >
-                              Ajustar
-                            </Button>
-                            <Button variant="secondary" onClick={() => setBoardZoom(1)} title="Reset">
-                              Reset
-                            </Button>
-
-                            <Button
-                              variant="secondary"
-                              onClick={() => setProjectSummaryModal('approved')}
-                              title="Ver demandas aprovadas"
-                            >
-                              Aprovadas
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => setProjectSummaryModal('finalized')}
-                              title="Ver demandas finalizadas"
-                            >
-                              Finalizadas
-                            </Button>
-                          
-                            <Button
-                              variant="secondary"
-                              onClick={() => setBoardFullscreen((v) => !v)}
-                              title="Tela cheia"
-                            >
-                              {boardFullscreen ? 'Sair tela cheia' : 'Tela cheia'}
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div
-                          ref={boardWrapRef}
-                          onWheel={handleBoardWheel}
-                          className={cn(
-                            'relative overflow-auto rounded-b-3xl min-h-[560px]',
-                            boardFullscreen ? 'h-[calc(100vh-190px)]' : 'h-[calc(100vh-320px)]'
-                          )}
-                          style={{
-                            background:
-                              "radial-gradient(ellipse at top, rgba(255,255,255,0.55), rgba(0,0,0,0)) , repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 12px, rgba(0,0,0,0.03) 12px, rgba(0,0,0,0.03) 24px), linear-gradient(180deg, #2b2b2b 0%, #1f1f1f 100%)",
-                          }}
-                        >
-                          <div
-                            className="flex gap-6 p-12 w-fit"
-                            style={{ transform: `scale(${boardZoom})`, transformOrigin: '0 0' }}
-                          >
-                            {projectBoard.columns.map((col) => {
-                              const cards = projectBoard.cards
-                                .filter((c) => c.columnId === col.id)
-                                .sort((a, b) => (Number(a.order ?? 0) || 0) - (Number(b.order ?? 0) || 0));
-
-                              const isOver = dragOverColumnId === col.id;
-                              const wipLimit = col.wipLimit ?? null;
-                              const wipExceeded = wipLimit != null && wipLimit > 0 && cards.length > wipLimit;
-
-                              return (
-                                <div
-                                  key={col.id}
-                                  className={cn(
-                                    'w-[420px] shrink-0 rounded-3xl border border-white/10 bg-white/10 backdrop-blur p-4 shadow-sm',
-                                    isOver ? 'ring-2 ring-violet-400' : ''
-                                  )}
-                                  onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setDragOverColumnId(col.id);
-                                  }}
-                                  onDragLeave={() => setDragOverColumnId(null)}
-                                  onDrop={(e) => {
-                                    e.preventDefault();
-                                    const id = e.dataTransfer.getData('text/plain');
-                                    if (id) dropCardToColumn(id, col.id);
-                                    setDragOverColumnId(null);
-                                    setDragOverCardId(null);
-                                  }}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="text-sm font-semibold text-white truncate">{col.title}</div>
-                                      <div className={cn('text-xs mt-1', wipExceeded ? 'text-red-200' : 'text-white/70')}>
-                                        {cards.length}
-                                        {wipLimit ? ` / ${wipLimit} (WIP)` : ''}
-                                      </div>
-                                    </div>
-
-                                    {activeProject?.isOwner ? (
-                                      <div className="flex items-center gap-2">
-                                        <div className="text-[11px] text-white/70">WIP</div>
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          value={col.wipLimit ?? ''}
-                                          onChange={(e) => {
-                                            const v = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
-                                            const next: ProjectBoard = {
-                                              ...projectBoard,
-                                              columns: projectBoard.columns.map((cc) => (cc.id === col.id ? { ...cc, wipLimit: v } : cc)),
-                                            };
-                                            setBoardAndScheduleSave(next);
-                                          }}
-                                          className="w-16 rounded-xl border border-white/20 bg-white/10 px-2 py-1 text-xs text-white outline-none"
-                                          title="Limite de WIP (0 = sem limite)"
-                                        />
-                                      </div>
-                                    ) : null}
-                                  </div>
-
-                                  <div className="mt-4 space-y-4">
-                                    {cards.length === 0 ? (
-                                      <div className="text-xs text-white/60">Solte um card aqui.</div>
-                                    ) : null}
-
-                                    {cards.map((c) => {
-                                      const angle = postitAngle(c.id);
-                                      const isOverCard = dragOverCardId === c.id;
-                                      const color = (c.color ?? 'yellow') as any;
-                                      const bg =
-                                        color === 'blue'
-                                          ? 'bg-sky-100'
-                                          : color === 'green'
-                                          ? 'bg-emerald-100'
-                                          : color === 'pink'
-                                          ? 'bg-pink-100'
-                                          : color === 'white'
-                                          ? 'bg-white'
-                                          : 'bg-yellow-100';
-
-                                      return (
-                                        <div
-                                          key={c.id}
-                                          draggable
-                                          onDragStart={(e) => {
-                                            setDraggingCardId(c.id);
-                                            e.dataTransfer.setData('text/plain', c.id);
-                                            e.dataTransfer.effectAllowed = 'move';
-                                          }}
-                                          onDragEnd={() => {
-                                            setDraggingCardId(null);
-                                            setDragOverColumnId(null);
-                                            setDragOverCardId(null);
-                                          }}
-                                          onDragOver={(e) => {
-                                            e.preventDefault();
-                                            setDragOverCardId(c.id);
-                                          }}
-                                          onDrop={(e) => {
-                                            e.preventDefault();
-                                            const id = e.dataTransfer.getData('text/plain');
-                                            if (id) dropCardToColumn(id, col.id, c.id);
-                                            setDragOverCardId(null);
-                                            setDragOverColumnId(null);
-                                          }}
-                                          onClick={() => openCard(c)}
-                                          className={cn(
-                                            'cursor-pointer rounded-2xl border border-zinc-200/70 p-4 shadow-[0_10px_25px_rgba(0,0,0,0.35)]',
-                                            bg,
-                                            isOverCard ? 'ring-2 ring-violet-500' : ''
-                                          )}
-                                          style={{ transform: `rotate(${angle}deg)` }}
-                                          title="Clique para editar"
-                                        >
-                                          <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0">
-                                              <div className="font-semibold text-sm truncate text-zinc-900">{c.title}</div>
-                                              {c.description ? (
-                                                <div className="mt-1 text-xs text-zinc-700 whitespace-pre-wrap line-clamp-4">{c.description}</div>
-                                              ) : null}
-                                            </div>
-                                            <button
-                                              type="button"
-                                              className="text-zinc-400 hover:text-red-600 flex-shrink-0"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteKanbanCard(c.id);
-                                              }}
-                                              title="Excluir"
-                                            >
-                                              <Icon name="trash" className="h-4 w-4" />
-                                            </button>
-                                          </div>
-
-                                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                                            {c.priority ? (
-                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">
-                                                {c.priority === 'urgent'
-                                                  ? 'URG'
-                                                  : c.priority === 'high'
-                                                  ? 'ALTA'
-                                                  : c.priority === 'med'
-                                                  ? 'MÉD'
-                                                  : 'BAIX'}
-                                              </span>
-                                            ) : null}
-                                            {c.dueDate ? (
-                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">📅 {c.dueDate}</span>
-                                            ) : null}
-                                            {c.checklist && c.checklist.length ? (
-                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">
-                                                ☑ {c.checklist.filter((x) => x.done).length}/{c.checklist.length}
-                                              </span>
-                                            ) : null}
-                                            {c.estimateHours != null ? (
-                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">⏱ {c.estimateHours}h</span>
-                                            ) : null}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-
-                                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/10 p-3">
-                                    <div className="text-xs font-semibold text-white/80">Novo post-it</div>
-                                    <div className="mt-2 space-y-2">
-                                      <Input
-                                        value={newCardTitle}
-                                        onChange={(e) => setNewCardTitle(e.target.value)}
-                                        placeholder="Título"
-                                      />
-                                      <Textarea
-                                        value={newCardDesc}
-                                        onChange={(e) => setNewCardDesc(e.target.value)}
-                                        rows={2}
-                                        placeholder="Descrição (opcional)"
-                                      />
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          variant="secondary"
-                                          onClick={() => {
-                                            setNewCardType('task');
-                                            setNewCardColor('white');
-                                            addKanbanCard(col.id);
-                                          }}
-                                        >
-                                          Adicionar
-                                        </Button>
-                                        <Button
-                                          variant="secondary"
-                                          onClick={() => {
-                                            // Quick reminder template
-                                            setNewCardTitle('Lembrete');
-                                            setNewCardDesc('- [ ] ...');
-                                          }}
-                                          title="Template checklist"
-                                        >
-                                          Template
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              </div>
-              </div>
+              <ProjectsSection
+                projects={projects}
+                activeProjectId={activeProjectId}
+                setActiveProjectId={setActiveProjectId}
+                newProjectName={newProjectName}
+                setNewProjectName={setNewProjectName}
+                newProjectDesc={newProjectDesc}
+                setNewProjectDesc={setNewProjectDesc}
+                newProjectType={newProjectType}
+                setNewProjectType={setNewProjectType}
+                newProjectHourlyRate={newProjectHourlyRate}
+                setNewProjectHourlyRate={setNewProjectHourlyRate}
+                createNewProject={createNewProject}
+                creatingProject={creatingProject}
+                removeProject={removeProject}
+                setProjectShareTarget={setProjectShareTarget}
+                setProjectShareOpen={setProjectShareOpen}
+                projectBoard={projectBoard}
+                projectBoardLoading={projectBoardLoading}
+                newColumnTitle={newColumnTitle}
+                setNewColumnTitle={setNewColumnTitle}
+                addKanbanColumn={addKanbanColumn}
+                newCardTitle={newCardTitle}
+                setNewCardTitle={setNewCardTitle}
+                newCardDesc={newCardDesc}
+                setNewCardDesc={setNewCardDesc}
+                newCardColor={newCardColor}
+                setNewCardColor={setNewCardColor}
+                addKanbanCard={addKanbanCard}
+                deleteKanbanCard={deleteKanbanCard}
+                moveKanbanCard={moveKanbanCard}
+                openCard={openCard}
+              />
             )}
 
             {/* Notes */}
             {section === 'notes' && (
-              <div className="mt-6 space-y-4">
-                <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-2">
-                    <Icon name="note" className="h-5 w-5 text-violet-600" />
-                    <div>
-                      <div className="font-semibold">Rascunho Rápido</div>
-                      <div className="text-xs text-zinc-500">
-                        Bloco de notas provisório. {notesUpdatedAt ? `Última atualização: ${new Date(notesUpdatedAt).toLocaleString()}` : ''}
-                      </div>
-                    </div>
-                  </div>
-                  <Button onClick={saveQuickNotes} disabled={loading || !notesDirty}>
-                    Salvar
-                  </Button>
-                </div>
-
-                <div className="mt-4">
-                  {loading ? (
-                    <Skeleton className="h-44 w-full" />
-                  ) : (
-                    <Textarea
-                      value={notes}
-                      onChange={(e) => {
-                        setNotes(e.target.value);
-                        setNotesDirty(true);
-                      }}
-                      rows={10}
-                      placeholder="Escreva lembretes rápidos aqui..."
-                      className="bg-white/90"
-                    />
-                  )}
-                  <div className="mt-2 text-[11px] text-zinc-500">
-                    {notesDirty ? 'Não salvo ainda.' : 'Salvo.'}
-                  </div>
-                </div>
-                </div>
-
-                <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                      <div className="font-semibold">Notas (cards)</div>
-                      <div className="text-xs text-zinc-500">Crie notas nomeadas com data, busque pelo nome ou conteúdo e use como referência de projeto.</div>
-                    </div>
-                    <Button onClick={() => { setEditingNote(null); setNoteModalOpen(true); setNoteForm({ title: '', content: '' }); }}>Nova nota</Button>
-                  </div>
-
-                  <div className="mt-4 flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Icon name="search" className="h-4 w-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <Input value={noteQuery} onChange={(e) => setNoteQuery(e.target.value)} placeholder="Buscar nota..." className="pl-9 bg-white/90" />
-                    </div>
-                    <Button variant="secondary" onClick={() => setNoteQuery('')}>Limpar</Button>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {(noteItems
-                      .filter((n) => {
-                        const q = noteQuery.trim().toLowerCase();
-                        if (!q) return true;
-                        return (n.title ?? '').toLowerCase().includes(q) || (n.content ?? '').toLowerCase().includes(q);
-                      })
-                      .sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt))
-                    ).map((n) => (
-                      <div key={n.id} className="rounded-2xl border border-zinc-200/70 bg-white p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="font-semibold text-sm">{n.title}</div>
-                            <div className="text-[11px] text-zinc-500">{new Date(n.updatedAt ?? n.createdAt).toLocaleString()}</div>
-                          </div>
-                          <div className="flex gap-1">
-                            <IconActionButton icon="copy" title="Copiar conteúdo" onClick={() => copyText(n.content)} />
-                            <IconActionButton icon="edit" title="Editar" onClick={() => { setEditingNote(n); setNoteForm({ title: n.title, content: n.content }); setNoteModalOpen(true); }} />
-                            <IconActionButton
-                              icon="trash"
-                              title="Excluir"
-                              onClick={async () => {
-                                if (!confirm('Excluir esta nota?')) return;
-                                try {
-                                  await deleteNoteItem(n.id);
-                                  setNoteItems((p) => p.filter((x) => x.id !== n.id));
-                                } catch {
-                                  push('Falha ao excluir nota', 'error');
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-3 text-sm text-zinc-700 whitespace-pre-wrap line-clamp-5">{n.content}</div>
-                      </div>
-                    ))}
-                    {noteItems.length === 0 && (
-                      <div className="text-sm text-zinc-500">Nenhuma nota criada ainda.</div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <NotesSection
+                loading={loading}
+                notes={notes}
+                notesDirty={notesDirty}
+                notesUpdatedAt={notesUpdatedAt}
+                onNotesChange={(v) => {
+                  setNotes(v);
+                  setNotesDirty(true);
+                }}
+                onSaveQuickNotes={saveQuickNotes}
+                noteItems={noteItems}
+                noteQuery={noteQuery}
+                setNoteQuery={setNoteQuery}
+                onClearQuery={() => setNoteQuery('')}
+                onNewNote={() => {
+                  setEditingNote(null);
+                  setNoteModalOpen(true);
+                  setNoteForm({ title: '', content: '' });
+                }}
+                onEditNote={(n) => {
+                  setEditingNote(n);
+                  setNoteForm({ title: n.title ?? '', content: n.content ?? '' });
+                  setNoteModalOpen(true);
+                }}
+                onDeleteNote={(n) => deleteNote(n.id)}
+                onCopyContent={(content) => copyText(content)}
+              />
             )}
+
           </div>
         </main>
       </div>
@@ -3360,7 +2559,7 @@ export default function Dashboard({
                   .map((x) => x.trim())
                   .filter(Boolean);
                 const uids = projectShareSelectedUids;
-                const resp = await shareProject(projectShareTarget.id, uids, emails);
+                const resp = await shareProject(projectShareTarget.id, { emails, uids });
                 const unresolved = (resp as any)?.unresolvedEmails;
                 if (Array.isArray(unresolved) && unresolved.length) {
                   push(
