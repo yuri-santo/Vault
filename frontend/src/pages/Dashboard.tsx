@@ -44,6 +44,9 @@ import { Icon } from './dashboard/Icons';
 import DriveSection from './dashboard/DriveSection';
 import NotesSection from './dashboard/NotesSection';
 import ProjectsSection from './dashboard/ProjectsSection';
+import VaultSection from './dashboard/VaultSection';
+import SharingSection from './dashboard/SharingSection';
+import EntryEditModal from './dashboard/modals/EntryEditModal';
 
 
 function maskPassword(p: string) {
@@ -540,6 +543,7 @@ export default function Dashboard({
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [newProjectType, setNewProjectType] = useState<'sap' | 'general'>('sap');
   const [newProjectHourlyRate, setNewProjectHourlyRate] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
 
   // Project sharing (owner-only)
   const [projectShareModalOpen, setProjectShareModalOpen] = useState(false);
@@ -973,6 +977,7 @@ export default function Dashboard({
   async function createNewProject() {
     const name = newProjectName.trim();
     if (!name) return push('Informe o nome do projeto', 'error');
+    setCreatingProject(true);
     try {
       const rate = parseFloat(String(newProjectHourlyRate).replace(',', '.'));
       await createProject(name, newProjectDesc.trim() || null, newProjectType, isFinite(rate) ? rate : null);
@@ -991,6 +996,8 @@ export default function Dashboard({
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Falha ao criar projeto';
       push(msg, 'error');
+    } finally {
+      setCreatingProject(false);
     }
   }
 
@@ -1482,298 +1489,36 @@ export default function Dashboard({
 
             {/* Vault */}
             {section === 'vault' && (
-              <div className="mt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Icon name="lock" className="h-5 w-5 text-violet-600" />
-                    <div className="text-lg font-semibold">Cofre Principal</div>
-                  </div>
-                  <div className="text-xs text-zinc-500 rounded-xl border border-zinc-200/70 bg-white/70 px-3 py-1.5">
-                    {loading ? '…' : `${filtered.length} entradas`}
-                  </div>
-                </div>
-
-                <div className="mt-3 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm overflow-hidden">
-                  <div className="px-5 py-3 border-b border-zinc-200/70 bg-white/50">
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div className="flex flex-wrap gap-1">
-                        {['', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')].map((L) => (
-                          <button
-                            key={L || 'all'}
-                            type="button"
-                            onClick={() => setAlphaFilter(L)}
-                            className={cn(
-                              'h-7 min-w-7 px-2 rounded-lg border text-[11px] font-medium transition',
-                              alphaFilter === L
-                                ? 'bg-violet-600 text-white border-violet-500'
-                                : 'bg-white/90 border-zinc-200/70 text-zinc-600 hover:bg-zinc-50'
-                            )}
-                            title={L ? `Filtrar por ${L}` : 'Todas'}
-                          >
-                            {L || 'Tudo'}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="text-[11px] text-zinc-500">
-                        {alphaFilter ? `Filtro: ${alphaFilter}` : 'Sem filtro por letra'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_260px] gap-3 px-5 py-3 border-b border-zinc-200/70 text-[11px] uppercase tracking-wide text-zinc-500">
-                    <div>Serviço {'/'} Nome</div>
-                    <div>Usuário</div>
-                    <div>E-mail</div>
-                    <div>IP {'/'} Host</div>
-                    <div>Senha</div>
-                    <div className="text-right pr-1">Ações</div>
-                  </div>
-
-                  <div>
-                    {loading ? (
-                      <div className="p-5 space-y-4">
-                        {[0, 1, 2, 3].map((i) => (
-                          <div key={i} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_260px] gap-3 items-center">
-                            <div>
-                              <Skeleton className="h-4 w-40" />
-                              <Skeleton className="h-3 w-24 mt-2" />
-                            </div>
-                            <Skeleton className="h-4 w-36" />
-                            <Skeleton className="h-4 w-44" />
-                            <Skeleton className="h-4 w-32" />
-                            <Skeleton className="h-9 w-44" />
-                            <div className="flex lg:justify-end">
-                              <Skeleton className="h-9 w-40 rounded-xl" />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : filtered.length === 0 ? (
-                      <div className="p-8 text-sm text-zinc-500">
-                        Nenhuma senha encontrada. Clique em <b>Nova Senha</b> para adicionar.
-                      </div>
-                    ) : (
-                      filtered.map((e) => {
-                        const revealed = Boolean(revealedIds[e.id]);
-                        const pass = e.password ?? '';
-                        return (
-                          <div
-                            key={e.id}
-                            className="px-5 py-4 border-b border-zinc-200/50 last:border-b-0"
-                          >
-                            {/* Card layout (mobile / tablet) */}
-                            <div className="lg:hidden">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="font-medium truncate">{e.name}</div>
-                                  <div className="text-xs text-zinc-500 mt-1 break-all">
-                                    {e.isShared ? `Compartilhado por ${e.ownerEmail || '—'}` : (e.email || e.ip || e.ownerEmail || '—')}
-                                  </div>
-                                  {e.url ? (
-                                    <a
-                                      href={(e.url.startsWith('http') ? e.url : `https://${e.url}`) as any}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="mt-1 inline-flex items-center gap-1 text-xs text-violet-700 hover:underline break-all"
-                                      title="Abrir URL"
-                                    >
-                                      <Icon name="externalLink" className="h-3.5 w-3.5" />
-                                      <span>{e.url}</span>
-                                    </a>
-                                  ) : null}
-                                </div>
-                                <EntryInlineActions
-                                  entry={e}
-                                  revealed={revealed}
-                                  onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                                  onView={() => openView(e)}
-                                  onShare={() => openShare(e)}
-                                  onEdit={() => openEdit(e)}
-                                  onDelete={() => removeEntry(e)}
-                                  compact
-                                />
-                              </div>
-
-                              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
-                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">Usuário</div>
-                                  <div className="text-sm text-zinc-800 break-all mt-1">{e.username || '—'}</div>
-                                </div>
-
-                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
-                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">E-mail</div>
-                                  <div className="text-sm text-zinc-800 break-all mt-1">{e.email || '—'}</div>
-                                </div>
-
-                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
-                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">IP {'/'} Host</div>
-                                  <div className="text-sm text-zinc-800 break-all mt-1">{e.ip || '—'}</div>
-                                </div>
-
-                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2">
-                                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">Senha</div>
-                                  <div className="text-sm font-mono text-zinc-800 mt-1 break-all">
-                                    {pass ? (revealed ? pass : maskPassword(pass)) : '—'}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Table row layout (desktop) */}
-                            <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_260px] gap-3 items-center">
-                              <div className="min-w-0">
-                                <div className="font-medium truncate">{e.name}</div>
-                                <div className="text-xs text-zinc-500 mt-1 truncate">
-                                  {e.isShared ? `Compartilhado por ${e.ownerEmail || '—'}` : (e.ownerEmail || '—')}
-                                </div>
-                                {e.url ? (
-                                  <a
-                                    href={(e.url.startsWith('http') ? e.url : `https://${e.url}`) as any}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="mt-1 inline-flex items-center gap-1 text-xs text-violet-700 hover:underline truncate"
-                                    title="Abrir URL"
-                                  >
-                                    <Icon name="externalLink" className="h-3.5 w-3.5" />
-                                    <span className="truncate">{e.url}</span>
-                                  </a>
-                                ) : null}
-                              </div>
-
-                              <div className="text-sm text-zinc-800 break-all">{e.username || '—'}</div>
-                              <div className="text-sm text-zinc-800 break-all">{e.email || '—'}</div>
-                              <div className="text-sm text-zinc-800 break-all">{e.ip || '—'}</div>
-
-                              <div className="flex items-center">
-                                <div className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-2 w-full">
-                                  <span className="text-sm font-mono text-zinc-800">
-                                    {pass ? (revealed ? pass : maskPassword(pass)) : '—'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="flex justify-end">
-                                <EntryInlineActions
-                                  entry={e}
-                                  revealed={revealed}
-                                  onRevealToggle={() => setRevealedIds((prev) => ({ ...prev, [e.id]: !prev[e.id] }))}
-                                  onView={() => openView(e)}
-                                  onShare={() => openShare(e)}
-                                  onEdit={() => openEdit(e)}
-                                  onDelete={() => removeEntry(e)}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }))}
-                  </div>
-                </div>
-              </div>
+              <VaultSection
+                loading={loading}
+                filtered={filtered}
+                alphaFilter={alphaFilter}
+                setAlphaFilter={setAlphaFilter}
+                revealedIds={revealedIds}
+                setRevealedIds={setRevealedIds}
+                maskPassword={maskPassword}
+                openView={openView}
+                openShare={openShare}
+                openEdit={openEdit}
+                removeEntry={removeEntry}
+                EntryInlineActions={EntryInlineActions}
+              />
             )}
 
             {/* Sharing */}
             {section === 'sharing' && (
-              <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
-                  <div className="flex items-center gap-2">
-                    <Icon name="share" className="h-5 w-5 text-violet-600" />
-                    <div className="font-semibold">Compartilhar</div>
-                  </div>
-                  <div className="text-xs text-zinc-500 mt-1">
-                    Convites exigem ação do destinatário (dupla intenção).
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <Input value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} placeholder="email@exemplo.com" />
-                    <Button onClick={doSendInvite}>Enviar</Button>
-                  </div>
-
-                  <div className="mt-5">
-                    <div className="text-xs font-semibold text-zinc-600">Conexões ativas</div>
-                    <div className="mt-2 space-y-2">
-                      {loading ? (
-                        <>
-                          <Skeleton className="h-12 w-full" />
-                          <Skeleton className="h-12 w-full" />
-                        </>
-                      ) : connections.length === 0 ? (
-                        <div className="text-sm text-zinc-500">Nenhuma conexão ativa.</div>
-                      ) : (
-                        connections.map((c) => (
-                          <div key={c.inviteId} className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-3 flex items-center justify-between">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">{c.email ?? c.uid}</div>
-                              <div className="text-xs text-zinc-500">Conectado</div>
-                            </div>
-                            <div className="text-xs text-zinc-500">OK</div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold">Convites</div>
-                      <div className="text-xs text-zinc-500">Recebidos e enviados.</div>
-                    </div>
-                    <Button variant="secondary" onClick={refreshAll}>
-                      Atualizar
-                    </Button>
-                  </div>
-
-                  <div className="mt-4">
-                    <div className="text-xs font-semibold text-zinc-600">Recebidos</div>
-                    <div className="mt-2 space-y-2">
-                      {loading ? (
-                        <Skeleton className="h-12 w-full" />
-                      ) : receivedInvites.filter((i) => i.status === 'pending').length === 0 ? (
-                        <div className="text-sm text-zinc-500">Nenhum convite pendente.</div>
-                      ) : (
-                        receivedInvites
-                          .filter((i) => i.status === 'pending')
-                          .map((i) => (
-                            <div key={i.id} className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-3 flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium truncate">De: {i.fromEmail ?? i.fromUid}</div>
-                                <div className="text-xs text-zinc-500">Pendente</div>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button onClick={() => doAccept(i.id)}>Aceitar</Button>
-                                <Button variant="secondary" onClick={() => doDecline(i.id)}>
-                                  Recusar
-                                </Button>
-                              </div>
-                            </div>
-                          ))
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-5">
-                    <div className="text-xs font-semibold text-zinc-600">Enviados</div>
-                    <div className="mt-2 space-y-2">
-                      {loading ? (
-                        <Skeleton className="h-12 w-full" />
-                      ) : sentInvites.length === 0 ? (
-                        <div className="text-sm text-zinc-500">Nenhum convite enviado.</div>
-                      ) : (
-                        sentInvites.slice(0, 5).map((i) => (
-                          <div key={i.id} className="rounded-2xl border border-zinc-200/70 bg-white px-3 py-3 flex items-center justify-between">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">Para: {i.toEmail ?? i.toUid ?? '—'}</div>
-                              <div className="text-xs text-zinc-500">{i.status}</div>
-                            </div>
-                            <div className="text-xs text-zinc-500">#{i.id.slice(0, 6)}</div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <SharingSection
+                loading={loading}
+                shareEmail={shareEmail}
+                setShareEmail={setShareEmail}
+                doSendInvite={doSendInvite}
+                connections={connections}
+                receivedInvites={receivedInvites}
+                sentInvites={sentInvites}
+                doAccept={doAccept}
+                doDecline={doDecline}
+                refreshAll={refreshAll}
+              />
             )}
 
             {/* Drive */}
@@ -1871,303 +1616,22 @@ export default function Dashboard({
       </div>
 
       {/* Modal create/edit */}
-      <Modal
+      <EntryEditModal
         open={modalOpen}
-        title={editing ? 'Editar senha' : 'Nova senha'}
+        editing={!!editing}
+        form={form}
+        setForm={setForm as any}
+        sapConn={sapConn as any}
+        setSapConn={setSapConn as any}
+        vpnConn={vpnConn as any}
+        setVpnConn={setVpnConn as any}
+        copyText={copyText}
         onClose={() => setModalOpen(false)}
-        size="xl"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Tipo de credencial</label>
-            <select
-              value={(form as any).entryType}
-              onChange={(e) => setForm((p: any) => ({ ...p, entryType: e.target.value }))}
-              className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="generic">Genérica</option>
-              <option value="website">Site {'/'} Login Web</option>
-              <option value="sap">Conexão SAP</option>
-              <option value="vpn">Conexão VPN</option>
-              <option value="json">JSON {'/'} ENV {'/'} App</option>
-            </select>
-            <div className="mt-1 text-[11px] text-zinc-500">
-              O formulário se adapta ao tipo escolhido para ficar mais clean.
-            </div>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Serviço {'/'} Nome</label>
-            <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ex.: AWS Console" />
-          </div>
-          {(['generic','website'].includes((form as any).entryType)) && (
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">URL (opcional)</label>
-            <div className="flex gap-2">
-              <Input value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} placeholder="Ex.: https://..." />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => copyText(form.url)}
-                disabled={!form.url.trim()}
-                title="Copiar"
-              >
-                <Icon name="copy" className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-	        {((form as any).entryType !== 'json') && (
-	          <>
-	            <div>
-	              <label className="text-xs font-medium text-zinc-600">Usuário</label>
-	              <Input
-	                value={form.username}
-	                onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
-	                placeholder="Ex.: root"
-	              />
-	            </div>
-
-	            <div>
-	              <label className="text-xs font-medium text-zinc-600">Senha</label>
-	              <Input
-	                value={form.password}
-	                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-	                placeholder="••••••••"
-	              />
-	            </div>
-	          </>
-	        )}
-          {((form as any).entryType === 'generic') && (
-          <div>
-            <label className="text-xs font-medium text-zinc-600">IP {'/'} Host</label>
-            <Input value={form.ip} onChange={(e) => setForm((p) => ({ ...p, ip: e.target.value }))} placeholder="Ex.: 10.0.0.10" />
-          </div>
-          )}
-          {((form as any).entryType === 'generic') && (
-          <div>
-            <label className="text-xs font-medium text-zinc-600">E-mail vinculado</label>
-            <Input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} placeholder="Ex.: admin@empresa.com" />
-          </div>
-          )}
-          {((form as any).entryType === 'sap') && (
-          <div className="sm:col-span-2">
-            <div className="flex items-center justify-between gap-3">
-              <label className="text-xs font-medium text-zinc-600">Conexão SAP (campos)</label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => copyText(JSON.stringify(sapConn, null, 2))}
-                  title="Copiar JSON"
-                >
-                  <Icon name="copy" className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[11px] text-zinc-500">Application Server</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.applicationServer} onChange={(e) => setSapConn((p) => ({ ...p, applicationServer: e.target.value }))} placeholder="ex.: 10.0.0.10" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.applicationServer)} disabled={!sapConn.applicationServer.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Instância</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.instanceNumber} onChange={(e) => setSapConn((p) => ({ ...p, instanceNumber: e.target.value }))} placeholder="ex.: 00" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.instanceNumber)} disabled={!sapConn.instanceNumber.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">SID</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.systemId} onChange={(e) => setSapConn((p) => ({ ...p, systemId: e.target.value.toUpperCase() }))} placeholder="ex.: PRD" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.systemId)} disabled={!sapConn.systemId.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Client</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.client} onChange={(e) => setSapConn((p) => ({ ...p, client: e.target.value }))} placeholder="ex.: 100" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.client)} disabled={!sapConn.client.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Idioma</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.language} onChange={(e) => setSapConn((p) => ({ ...p, language: e.target.value }))} placeholder="ex.: PT" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.language)} disabled={!sapConn.language.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">SNC Name (opcional)</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.sncName} onChange={(e) => setSapConn((p) => ({ ...p, sncName: e.target.value }))} placeholder="ex.: p:CN=..." />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.sncName)} disabled={!sapConn.sncName.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div className="sm:col-span-3">
-                <label className="text-[11px] text-zinc-500">Cadeia SAProuter</label>
-                <div className="flex gap-2">
-                  <Textarea value={sapConn.sapRouter} onChange={(e) => setSapConn((p) => ({ ...p, sapRouter: e.target.value }))} rows={2} placeholder="/H/1.2.3.4/H/..." />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.sapRouter)} disabled={!sapConn.sapRouter.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-zinc-500">Message Server</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.messageServer} onChange={(e) => setSapConn((p) => ({ ...p, messageServer: e.target.value }))} placeholder="ex.: msg01" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.messageServer)} disabled={!sapConn.messageServer.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-[11px] text-zinc-500">Logon Group</label>
-                <div className="flex gap-2">
-                  <Input value={sapConn.logonGroup} onChange={(e) => setSapConn((p) => ({ ...p, logonGroup: e.target.value }))} placeholder="ex.: PUBLIC" />
-                  <Button type="button" variant="secondary" onClick={() => copyText(sapConn.logonGroup)} disabled={!sapConn.logonGroup.trim()} title="Copiar"><Icon name="copy" className="h-4 w-4" /></Button>
-                </div>
-              </div>
-            </div>
-          </div>
-          )}
-          
-          {((form as any).entryType === 'vpn') && (
-            <div className="sm:col-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <label className="text-xs font-medium text-zinc-600">Conexão VPN (campos)</label>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => copyText(JSON.stringify(vpnConn, null, 2))}
-                  title="Copiar JSON"
-                >
-                  <Icon name="copy" className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-[11px] text-zinc-500">Provider</label>
-                  <div className="flex gap-2">
-                    <Input value={vpnConn.provider} onChange={(e) => setVpnConn((p) => ({ ...p, provider: e.target.value }))} placeholder="ex.: FortiClient" />
-                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.provider)} disabled={!vpnConn.provider.trim()} title="Copiar">
-                      <Icon name="copy" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="text-[11px] text-zinc-500">Server {'/'} Gateway</label>
-                  <div className="flex gap-2">
-                    <Input value={vpnConn.server} onChange={(e) => setVpnConn((p) => ({ ...p, server: e.target.value }))} placeholder="ex.: vpn.empresa.com" />
-                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.server)} disabled={!vpnConn.server.trim()} title="Copiar">
-                      <Icon name="copy" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-zinc-500">Port</label>
-                  <div className="flex gap-2">
-                    <Input value={vpnConn.port} onChange={(e) => setVpnConn((p) => ({ ...p, port: e.target.value }))} placeholder="ex.: 443" />
-                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.port)} disabled={!vpnConn.port.trim()} title="Copiar">
-                      <Icon name="copy" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-zinc-500">Protocol</label>
-                  <div className="flex gap-2">
-                    <Input value={vpnConn.protocol} onChange={(e) => setVpnConn((p) => ({ ...p, protocol: e.target.value }))} placeholder="ex.: SSL-VPN" />
-                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.protocol)} disabled={!vpnConn.protocol.trim()} title="Copiar">
-                      <Icon name="copy" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-zinc-500">Username</label>
-                  <div className="flex gap-2">
-                    <Input value={vpnConn.username} onChange={(e) => setVpnConn((p) => ({ ...p, username: e.target.value }))} placeholder="ex.: rafael" />
-                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.username)} disabled={!vpnConn.username.trim()} title="Copiar">
-                      <Icon name="copy" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-zinc-500">Domain {'/'} Realm</label>
-                  <div className="flex gap-2">
-                    <Input value={vpnConn.domain} onChange={(e) => setVpnConn((p) => ({ ...p, domain: e.target.value }))} placeholder="ex.: AD" />
-                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.domain)} disabled={!vpnConn.domain.trim()} title="Copiar">
-                      <Icon name="copy" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label className="text-[11px] text-zinc-500">Profile {'/'} Observações</label>
-                  <div className="flex gap-2">
-                    <Textarea value={vpnConn.profile} onChange={(e) => setVpnConn((p) => ({ ...p, profile: e.target.value }))} rows={2} placeholder="ex.: profile name / split tunneling / etc" />
-                    <Button type="button" variant="secondary" onClick={() => copyText(vpnConn.profile)} disabled={!vpnConn.profile.trim()} title="Copiar">
-                      <Icon name="copy" className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label className="text-[11px] text-zinc-500">Notas VPN</label>
-                  <Textarea value={vpnConn.notes} onChange={(e) => setVpnConn((p) => ({ ...p, notes: e.target.value }))} rows={2} placeholder="Tokens, certificados, passos..." />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {((form as any).entryType !== 'website') && (
-            <div className="sm:col-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <label className="text-xs font-medium text-zinc-600">Dados gerais {'/'} JSON (env, configs, apps)</label>
-                <Button type="button" variant="secondary" onClick={() => copyText(metaJsonText)} disabled={!metaJsonText.trim()} title="Copiar">
-                  <Icon name="copy" className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <Textarea
-                value={metaJsonText}
-                onChange={(e) => setMetaJsonText(e.target.value)}
-                rows={4}
-                placeholder={'Cole um JSON (ex.: {"env": {"API_URL": "..."}, "urls": [...]}) ou texto livre'}
-              />
-
-              <div className="mt-1 text-[11px] text-zinc-500">
-                Dica: se você colar um JSON válido aqui, o sistema salva estruturado e facilita filtros no futuro.
-              </div>
-            </div>
-          )}
-
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium text-zinc-600">Notas</label>
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-              rows={3}
-              placeholder="Observações internas..."
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <Button variant="secondary" onClick={() => setModalOpen(false)}>
-            Cancelar
-          </Button>
-          <Button onClick={saveEntry}>{editing ? 'Salvar alterações' : 'Criar senha'}</Button>
-        </div>
-      </Modal>
+        onSave={saveEntry}
+      />
 
       {/* Modal view details */}
+
       <Modal
         open={viewOpen}
         title={viewEntry ? `Senha: ${viewEntry.name}` : 'Detalhes da senha'}
