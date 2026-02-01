@@ -294,6 +294,37 @@ function EntryActions({
   useOutsideClick(boxRef, () => setOpen(false));
   const { push } = useToast();
 
+
+async function copyText(text: string) {
+  const value = (text ?? '').toString();
+  if (!value.trim()) {
+    push('Nada para copiar.', 'info');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(value);
+    push('Copiado para a área de transferência!', 'success');
+  } catch {
+    // Fallback antigo
+    try {
+      const el = document.createElement('textarea');
+      el.value = value;
+      el.style.position = 'fixed';
+      el.style.left = '-9999px';
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      push('Copiado para a área de transferência!', 'success');
+    } catch {
+      push('Não foi possível copiar.', 'error');
+    }
+  }
+}
+
+
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
     push(`${label} copiado ✅`, 'success');
@@ -397,15 +428,17 @@ function EntryActions({
 
 function IconActionButton({
   title,
+  icon,
   onClick,
   disabled,
   children,
   danger,
 }: {
   title: string;
+  icon?: IconName;
   onClick?: () => void;
   disabled?: boolean;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   danger?: boolean;
 }) {
   return (
@@ -421,7 +454,7 @@ function IconActionButton({
         danger ? 'text-rose-600 hover:bg-rose-50' : 'text-zinc-700'
       )}
     >
-      {children}
+      {children ?? (icon ? <Icon name={icon} className="h-4 w-4" /> : null)}
     </button>
   );
 }
@@ -1293,6 +1326,12 @@ export default function Dashboard({
     if (cardEdit.approved && projectBoard.columns.some((c) => c.id === 'approved')) {
       columnId = 'approved';
     }
+
+
+  async function saveCardEdits() {
+    await persistCardEdits();
+    setCardModalOpen(false);
+  }
     nextCard.columnId = columnId;
     if (cardEdit.approved && !nextCard.approvedAt) nextCard.approvedAt = now;
 
@@ -2228,7 +2267,7 @@ export default function Dashboard({
                                     setNewCardColor('white');
                                     const col = projectBoard.columns[0]?.id ?? 'backlog';
                                     setNewCardColumnId(col);
-                                    setNewCardModalOpen(true);
+                                    addKanbanCard(col);
                                   }}
                                 >
                                   + Tarefa
@@ -2292,7 +2331,7 @@ export default function Dashboard({
                             >
                               {boardFullscreen ? 'Sair tela cheia' : 'Tela cheia'}
                             </Button>
-</div>
+                          </div>
                         </div>
 
                         <div
@@ -2522,6 +2561,8 @@ export default function Dashboard({
                     )}
                   </div>
                 </div>
+              </div>
+              </div>
               </div>
             )}
 
@@ -3319,7 +3360,7 @@ export default function Dashboard({
                   .map((x) => x.trim())
                   .filter(Boolean);
                 const uids = projectShareSelectedUids;
-                const resp = await shareProject(projectShareTarget.id, { emails, uids });
+                const resp = await shareProject(projectShareTarget.id, uids, emails);
                 const unresolved = (resp as any)?.unresolvedEmails;
                 if (Array.isArray(unresolved) && unresolved.length) {
                   push(
