@@ -630,10 +630,7 @@ export default function Dashboard({
   const [cardEdit, setCardEdit] = useState({
     title: '',
     description: '',
-          type:
-            newCardType === 'note'
-              ? 'note'
-              : ((projects.find((p) => p.id === activeProjectId)?.projectType ?? 'general') as any),
+    type: ('general' as any),
     estimateHours: '',
     priority: 'med',
     dueDate: '',
