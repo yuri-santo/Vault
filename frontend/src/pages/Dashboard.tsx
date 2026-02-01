@@ -577,6 +577,9 @@ export default function Dashboard({
   const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
   const [projectShareEmails, setProjectShareEmails] = useState('');
   const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<string[]>([]);
+
+  // Kanban: new column UI
+  const [newColumnTitle, setNewColumnTitle] = useState('');
   const [newCardTitle, setNewCardTitle] = useState('');
   const [newCardDesc, setNewCardDesc] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
@@ -1113,6 +1116,20 @@ export default function Dashboard({
     await saveBoard(next);
   }
 
+  async function addKanbanColumn() {
+    if (!projectBoard) return;
+    const title = newColumnTitle.trim();
+    if (!title) return push('Informe o nome da coluna', 'error');
+
+    const id = `col_${Math.random().toString(36).slice(2, 10)}`;
+    const next: ProjectBoard = {
+      ...projectBoard,
+      columns: [...projectBoard.columns, { id, title }],
+    };
+    setNewColumnTitle('');
+    await saveBoard(next);
+  }
+
   async function moveKanbanCard(cardId: string, columnId: string) {
     if (!projectBoard) return;
     const now = new Date().toISOString();
@@ -1130,6 +1147,15 @@ export default function Dashboard({
     if (!projectBoard) return;
     const next: ProjectBoard = { ...projectBoard, cards: projectBoard.cards.filter((c) => c.id !== cardId) };
     await saveBoard(normalizeOrders(next));
+  }
+
+  // Adapters for the modular ProjectsSection (expects signatures with columnId)
+  async function deleteKanbanCardUI(_columnId: string, cardId: string) {
+    return deleteKanbanCard(cardId);
+  }
+
+  async function moveKanbanCardUI(_fromColumnId: string, toColumnId: string, cardId: string) {
+    return moveKanbanCard(cardId, toColumnId);
   }
 
   function dropCardToColumn(cardId: string, columnId: string, beforeCardId?: string) {
@@ -1314,6 +1340,20 @@ export default function Dashboard({
       <span className="font-medium">{label}</span>
     </button>
   );
+
+  // UI-friendly board: attach cards to each column (ProjectsSection expects column.cards)
+  const projectBoardUI = useMemo(() => {
+    if (!projectBoard) return null as any;
+    const byCol: Record<string, KanbanCard[]> = {};
+    for (const c of projectBoard.cards || []) {
+      (byCol[c.columnId] = byCol[c.columnId] || []).push(c);
+    }
+    const cols = (projectBoard.columns || []).map((col: any) => ({
+      ...col,
+      cards: (byCol[col.id] || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    }));
+    return { ...projectBoard, columns: cols };
+  }, [projectBoard]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-slate-50 text-zinc-900">
@@ -1604,7 +1644,7 @@ export default function Dashboard({
                 removeProject={removeProject}
                 setProjectShareTarget={setProjectShareTarget}
                 setProjectShareOpen={setProjectShareModalOpen}
-                projectBoard={projectBoard}
+                projectBoard={projectBoardUI}
                 projectBoardLoading={projectBoardLoading}
                 newColumnTitle={newColumnTitle}
                 setNewColumnTitle={setNewColumnTitle}
@@ -1616,8 +1656,8 @@ export default function Dashboard({
                 newCardColor={newCardColor}
                 setNewCardColor={setNewCardColor}
                 addKanbanCard={addKanbanCard}
-                deleteKanbanCard={deleteKanbanCard}
-                moveKanbanCard={moveKanbanCard}
+                deleteKanbanCard={deleteKanbanCardUI}
+                moveKanbanCard={moveKanbanCardUI}
                 openCard={openCard}
               />
             )}

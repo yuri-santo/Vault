@@ -12,8 +12,8 @@ type Props = {
   setNewProjectName: (v: string) => void;
   newProjectDesc: string;
   setNewProjectDesc: (v: string) => void;
-  newProjectType: 'tarefa' | 'projeto';
-  setNewProjectType: (v: 'tarefa' | 'projeto') => void;
+  newProjectType: 'sap' | 'general';
+  setNewProjectType: (v: 'sap' | 'general') => void;
   newProjectHourlyRate: string;
   setNewProjectHourlyRate: (v: string) => void;
   creatingProject: boolean;
@@ -121,18 +121,18 @@ export default function ProjectsSection(props: Props) {
           <Input value={newProjectHourlyRate} onChange={(e) => setNewProjectHourlyRate(e.target.value)} placeholder="R$/hora (opcional)" />
           <div className="flex gap-2">
             <Button
-              variant={newProjectType === 'projeto' ? 'default' : 'secondary'}
-              onClick={() => setNewProjectType('projeto')}
+              variant={newProjectType === 'sap' ? 'default' : 'secondary'}
+              onClick={() => setNewProjectType('sap')}
               className="flex-1"
             >
-              Projeto
+              SAP
             </Button>
             <Button
-              variant={newProjectType === 'tarefa' ? 'default' : 'secondary'}
-              onClick={() => setNewProjectType('tarefa')}
+              variant={newProjectType === 'general' ? 'default' : 'secondary'}
+              onClick={() => setNewProjectType('general')}
               className="flex-1"
             >
-              Tarefa
+              Geral
             </Button>
           </div>
           <Button disabled={creatingProject || !newProjectName.trim()} onClick={createNewProject}>
