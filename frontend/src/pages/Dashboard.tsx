@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Skeleton, Textarea, cn } from '../components/ui';
 import {
   acceptInvite,
@@ -404,6 +404,33 @@ export default function Dashboard({
 }) {
   const { push } = useToast();
 
+  // Clipboard helper shared across the dashboard (Notes, Projects, Vault, modals)
+  const copyText = useCallback(
+    async (text: string) => {
+      const value = (text ?? '').toString();
+      try {
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          // Fallback for older browsers / restricted contexts
+          const ta = document.createElement('textarea');
+          ta.value = value;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        push('Copiado ✅', 'success');
+      } catch {
+        push('Não foi possível copiar', 'error');
+      }
+    },
+    [push]
+  );
+
   const [section, setSection] = useState<Section>('vault');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -585,6 +612,21 @@ export default function Dashboard({
   const [notesDirty, setNotesDirty] = useState(false);
   const [notesUpdatedAt, setNotesUpdatedAt] = useState<string | null>(null);
   const [noteItems, setNoteItems] = useState<NoteItem[]>([]);
+
+  async function deleteNote(id: string) {
+    if (!confirm('Excluir esta nota?')) return;
+    try {
+      const res: any = await deleteNoteItem(id);
+      if (res?.ok) {
+        setNoteItems((prev) => prev.filter((n) => n.id !== id));
+        push('Nota excluída', 'success');
+      } else {
+        push('Erro ao excluir nota', 'error');
+      }
+    } catch {
+      push('Erro ao excluir nota', 'error');
+    }
+  }
   const [noteQuery, setNoteQuery] = useState('');
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
