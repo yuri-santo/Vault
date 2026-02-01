@@ -670,6 +670,20 @@ export default function Dashboard({
   // Kanban (UI)
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
   const [boardZoom, setBoardZoom] = useState(1);
+
+  const [boardFullscreen, setBoardFullscreen] = useState(false);
+
+  function clampNum(v: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, v));
+  }
+
+  function handleBoardWheel(e: React.WheelEvent) {
+    // Zoom with mouse wheel (Ctrl/Cmd or Alt). Keeps normal scrolling when not zooming.
+    if (!(e.ctrlKey || e.metaKey || e.altKey)) return;
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? -1 : 1;
+    setBoardZoom((z) => clampNum(Number((z + dir * 0.06).toFixed(2)), 0.55, 1.85));
+  }
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
   const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
@@ -2028,6 +2042,7 @@ export default function Dashboard({
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2046,7 +2061,7 @@ export default function Dashboard({
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
+                <div className="mt-4 flex flex-col gap-4">
                   <div className="rounded-3xl border border-zinc-200/70 bg-white p-4">
                     <div className="text-xs font-semibold text-zinc-600">Seus projetos</div>
                     <div className="mt-3 space-y-2">
@@ -2132,7 +2147,19 @@ export default function Dashboard({
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-zinc-200/70 bg-white p-4 overflow-x-auto">
+                  {boardFullscreen && (
+                    <div
+                      className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+                      onClick={() => setBoardFullscreen(false)}
+                    />
+                  )}
+                  <div className={cn(boardFullscreen ? 'fixed inset-0 z-50 p-3 sm:p-4' : '')}>
+                    <div
+                      className={cn(
+                        'rounded-3xl border border-zinc-200/70 bg-white p-4 overflow-x-auto',
+                        boardFullscreen ? 'h-full w-full flex flex-col overflow-hidden shadow-xl' : ''
+                      )}
+                    >
                     {!activeProjectId ? (
                       <div className="text-sm text-zinc-500">Selecione um projeto.</div>
                     ) : projectBoardLoading ? (
@@ -2222,12 +2249,24 @@ export default function Dashboard({
                             <Button variant="secondary" onClick={() => setBoardZoom(1)} title="Reset">
                               Reset
                             </Button>
-                          </div>
+                          
+                            <Button
+                              variant="secondary"
+                              onClick={() => setBoardFullscreen((v) => !v)}
+                              title="Tela cheia"
+                            >
+                              {boardFullscreen ? 'Sair tela cheia' : 'Tela cheia'}
+                            </Button>
+</div>
                         </div>
 
                         <div
                           ref={boardWrapRef}
-                          className="relative h-[calc(100vh-360px)] min-h-[560px] overflow-auto rounded-b-3xl"
+                          onWheel={handleBoardWheel}
+                          className={cn(
+                            'relative overflow-auto rounded-b-3xl min-h-[560px]',
+                            boardFullscreen ? 'h-[calc(100vh-190px)]' : 'h-[calc(100vh-320px)]'
+                          )}
                           style={{
                             background:
                               "radial-gradient(ellipse at top, rgba(255,255,255,0.55), rgba(0,0,0,0)) , repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 12px, rgba(0,0,0,0.03) 12px, rgba(0,0,0,0.03) 24px), linear-gradient(180deg, #2b2b2b 0%, #1f1f1f 100%)",
@@ -3452,7 +3491,7 @@ export default function Dashboard({
                   placeholder="Adicionar comentário..."
                 />
                 <div className="mt-2 flex justify-end">
-                  <Button variant="secondary" onClick={addCommentToCard}>
+                  <Button variant="secondary" onClick={addCardComment}>
                     Adicionar comentário
                   </Button>
                 </div>
@@ -3483,7 +3522,7 @@ export default function Dashboard({
                 <Input value={newCardEmailSubject} onChange={(e) => setNewCardEmailSubject(e.target.value)} placeholder="Assunto do e-mail" />
                 <Textarea value={newCardEmailBody} onChange={(e) => setNewCardEmailBody(e.target.value)} rows={3} placeholder="Conteúdo do e-mail..." />
                 <div className="flex justify-end">
-                  <Button variant="secondary" onClick={addEmailToCard}>
+                  <Button variant="secondary" onClick={addCardEmail}>
                     Registrar e-mail
                   </Button>
                 </div>
