@@ -36,9 +36,9 @@ api.interceptors.request.use((config) => {
     (config.headers as any)['Authorization'] = `Bearer ${authToken}`;
   }
 
-  // csurf expects this header for state-changing methods
-  // If we are using Bearer, backend skips CSRF.
-  if (!authToken && csrfToken && config.method && ['post', 'put', 'patch', 'delete'].includes(config.method)) {
+  // csurf expects this header for state-changing methods.
+  // Even when using Bearer auth, some deployments may still enforce CSRF.
+  if (csrfToken && config.method && ['post', 'put', 'patch', 'delete'].includes(config.method)) {
     config.headers = config.headers ?? {};
     (config.headers as any)['X-CSRF-Token'] = csrfToken;
   }
@@ -46,10 +46,13 @@ api.interceptors.request.use((config) => {
 });
 
 export async function initCsrf() {
-  if (authToken) return null;
-  const { data } = await api.get('/auth/csrf');
-  csrfToken = data.csrfToken;
-  return csrfToken;
+  try {
+    const { data } = await api.get('/auth/csrf');
+    csrfToken = data.csrfToken;
+    return csrfToken;
+  } catch {
+    return null;
+  }
 }
 
 export type SessionUser = { uid: string; email?: string; role?: string };
@@ -68,6 +71,9 @@ export async function createSession(idToken: string) {
   } catch {
     // ignore
   }
+
+  // Best-effort CSRF token fetch (some deployments still require it)
+  await initCsrf();
 
   // Fetch the user profile via Bearer.
   return await me();
@@ -222,7 +228,7 @@ export async function browseDrive(parentId?: string | null) {
   return data as { items: DriveItem[]; needsSetup?: boolean; parentId?: string | null; rootFolderId?: string | null };
 }
 
-export async function uploadDriveFile(file: File, opts?: { folderLink?: string; persistFolder?: boolean }) {
+export async function uploadDriveFile(file: File) {
   // JSON upload (base64) to avoid multipart parsing deps.
   // Backend may reply with 501 if upload is not configured.
   const buf = await file.arrayBuffer();
@@ -231,8 +237,6 @@ export async function uploadDriveFile(file: File, opts?: { folderLink?: string; 
     fileName: file.name,
     mimeType: file.type || 'application/octet-stream',
     dataBase64: b64,
-    folderLink: opts?.folderLink,
-    persistFolder: opts?.persistFolder ? true : false,
   });
   return data as { ok: boolean; file: DriveFile };
 }
@@ -260,11 +264,6 @@ export async function deleteNoteItem(id: string) {
   return data as { ok: boolean };
 }
 
-export async function moveDriveFile(fileId: string, destFolderLink: string) {
-  const { data } = await api.post('/drive/move', { fileId, folderLink: destFolderLink });
-  return data as { ok: boolean; moved?: any };
-}
-
 export async function deleteDriveFile(fileId: string) {
   const { data } = await api.delete(`/drive/files/${fileId}`);
   return data as { ok: boolean };
@@ -274,9 +273,9 @@ export async function deleteDriveFile(fileId: string) {
 export type Project = {
   id: string;
   ownerEmail?: string | null;
-  sharedWith?: string[] | null;
-  shareLog?: Array<{ at: string; byUid: string; byEmail?: string | null; toUid: string; toEmail?: string | null }> | null;
-  _access?: 'owner' | 'shared';
+  sharedWith?: string[];
+  isOwner?: boolean;
+  canEdit?: boolean;
   projectType?: 'sap' | 'general';
   name: string;
   description?: string | null;
@@ -286,7 +285,7 @@ export type Project = {
   hourlyRate?: number | null;
 };
 
-export type KanbanColumn = { id: string; title: string };
+export type KanbanColumn = { id: string; title: string; wipLimit?: number | null };
 export type KanbanCard = {
   id: string;
   columnId: string;
@@ -294,6 +293,11 @@ export type KanbanCard = {
   description?: string | null;
   estimateHours?: number | null;
   type?: 'sap' | 'general' | 'note' | null;
+  order?: number | null;
+  priority?: 'low' | 'med' | 'high' | 'urgent' | null;
+  dueDate?: string | null;
+  checklist?: Array<{ id: string; text: string; done: boolean }> | null;
+  color?: 'yellow' | 'blue' | 'green' | 'pink' | 'white' | null;
   tags?: string[] | null;
   comments?: Array<{ at: string; author?: string | null; text: string }> | null;
   emails?: Array<{ at: string; subject?: string | null; body: string }> | null;
@@ -321,9 +325,17 @@ export async function createProject(
 }
 
 
-export async function updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'description' | 'driveFolderOverrideId'>>) {
+export async function updateProject(
+  id: string,
+  patch: Partial<Pick<Project, 'name' | 'description' | 'driveFolderOverrideId' | 'hourlyRate'>>
+) {
   const { data } = await api.put(`/projects/${id}`, patch);
   return data as { ok: boolean };
+}
+
+export async function shareProject(id: string, uids: string[], emails: string[]) {
+  const { data } = await api.put(`/projects/${id}/share`, { uids, emails });
+  return data as { ok: boolean; sharedWith: string[]; unresolvedEmails: string[] };
 }
 
 export async function deleteProject(id: string) {
@@ -333,39 +345,10 @@ export async function deleteProject(id: string) {
 
 export async function getProjectBoard(id: string) {
   const { data } = await api.get(`/projects/${id}/board`);
-  return data as { board: ProjectBoard };
+  return data as { board: ProjectBoard; meta?: { isOwner: boolean; canEdit: boolean; ownerEmail?: string | null } };
 }
 
 export async function saveProjectBoard(id: string, board: ProjectBoard) {
   const { data } = await api.put(`/projects/${id}/board`, { board });
   return data as { ok: boolean };
-}
-
-
-// Projetos — Post-its (stickies)
-export type StickyNote = {
-  id: string;
-  text: string;
-  color?: 'yellow' | 'pink' | 'blue' | 'green' | 'purple';
-  x?: number;
-  y?: number;
-  rotation?: number;
-  createdAt?: string;
-  updatedAt?: string;
-  createdBy?: string;
-};
-
-export async function shareProject(id: string, payload: { uids?: string[]; emails?: string[] }) {
-  const { data } = await api.post(`/projects/${id}/share`, payload);
-  return data as { ok: boolean; sharedWith: string[] };
-}
-
-export async function getProjectStickies(id: string) {
-  const { data } = await api.get(`/projects/${id}/stickies`);
-  return data as { stickies: StickyNote[] };
-}
-
-export async function saveProjectStickies(id: string, stickies: StickyNote[]) {
-  const { data } = await api.put(`/projects/${id}/stickies`, { stickies });
-  return data as { ok: boolean; stickies: StickyNote[] };
 }

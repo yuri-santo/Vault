@@ -13,7 +13,7 @@ type ProjectsRouterOpts = {
   fbDb: admin.firestore.Firestore;
 };
 
-type KanbanColumn = { id: string; title: string };
+type KanbanColumn = { id: string; title: string; wipLimit?: number | null };
 type KanbanCard = {
   id: string;
   columnId: string;
@@ -21,6 +21,12 @@ type KanbanCard = {
   description?: string | null;
   estimateHours?: number | null;
   type?: 'sap' | 'general' | 'note' | null;
+  // New fields (optional)
+  order?: number | null;
+  priority?: 'low' | 'med' | 'high' | 'urgent' | null;
+  dueDate?: string | null; // ISO date string (YYYY-MM-DD)
+  checklist?: Array<{ id: string; text: string; done: boolean }> | null;
+  color?: 'yellow' | 'blue' | 'green' | 'pink' | 'white' | null;
   tags?: string[] | null;
   comments?: Array<{ at: string; author?: string | null; text: string }> | null;
   emails?: Array<{ at: string; subject?: string | null; body: string }> | null;
@@ -34,8 +40,7 @@ type KanbanCard = {
 type ProjectDoc = {
   ownerUid: string;
   ownerEmail?: string | null;
-  sharedWith?: string[] | null;
-  shareLog?: Array<{ at: string; byUid: string; byEmail?: string | null; toUid: string; toEmail?: string | null }> | null;
+  sharedWith?: string[];
   projectType?: 'sap' | 'general';
   name: string;
   description?: string | null;
@@ -48,6 +53,17 @@ type ProjectDoc = {
   driveFolderOverrideId?: string | null;
   hourlyRate?: number | null;
 };
+
+function canAccessProject(doc: any, uid: string) {
+  if (!doc) return false;
+  if (doc.ownerUid === uid) return true;
+  const shared = Array.isArray(doc.sharedWith) ? doc.sharedWith : [];
+  return shared.includes(uid);
+}
+
+function isOwner(doc: any, uid: string) {
+  return Boolean(doc && doc.ownerUid === uid);
+}
 
 function getIp(req: any) {
   return (
@@ -87,6 +103,8 @@ function defaultBoard(nowIso: string, projectType: 'sap' | 'general') {
           ? 'Crie cards para demandas SAP, dúvidas, transportes, QA/Produção e aprovações. Use as colunas como no fluxo real.'
           : 'Crie cards para dúvidas, backlog, pendências e entregas. Movimente entre colunas conforme evolui.',
       type: projectType,
+      // @ts-ignore - optional field for ordering
+      order: 100,
       createdAt: nowIso,
       updatedAt: nowIso,
     },
@@ -94,28 +112,50 @@ function defaultBoard(nowIso: string, projectType: 'sap' | 'general') {
   return { columns, cards };
 }
 
+async function resolveEmailsToUids(fbAuth: Auth, emails: string[]) {
+  const out: { uids: string[]; unresolved: string[] } = { uids: [], unresolved: [] };
+  for (const raw of emails) {
+    const email = String(raw ?? '').trim().toLowerCase();
+    if (!email || !email.includes('@')) continue;
+    try {
+      const u = await fbAuth.getUserByEmail(email);
+      if (u?.uid) out.uids.push(u.uid);
+    } catch {
+      out.unresolved.push(email);
+    }
+  }
+  out.uids = Array.from(new Set(out.uids));
+  out.unresolved = Array.from(new Set(out.unresolved));
+  return out;
+}
+
 export function projectsRouter(opts: ProjectsRouterOpts) {
   const r = Router();
   const auth = requireSession(opts.fbAuth as any);
   const col = opts.fbDb.collection('projects');
 
-  // List projects (owned + shared)
+  // List projects
   r.get('/', auth, async (req: AuthedRequest, res) => {
     const uid = req.user!.uid;
-
     const [ownedSnap, sharedSnap] = await Promise.all([
       col.where('ownerUid', '==', uid).get(),
-      col.where('sharedWith', 'array-contains', uid).get(),
+      col.where('sharedWith', 'array-contains', uid).get().catch(() => ({ docs: [] } as any)),
     ]);
 
-    const seen = new Set<string>();
-    const projects = ([] as any[])
-      .concat(ownedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any), _access: 'owner' })))
-      .concat(sharedSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any), _access: 'shared' })))
-      .filter((p: any) => {
-        if (seen.has(p.id)) return false;
-        seen.add(p.id);
-        return true;
+    const byId = new Map<string, any>();
+    for (const d of ownedSnap.docs) byId.set(d.id, { id: d.id, ...(d.data() as any) });
+    for (const d of (sharedSnap as any).docs ?? []) {
+      if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...(d.data() as any) });
+    }
+
+    const projects = Array.from(byId.values())
+      .map((p: any) => {
+        const isOwner = String(p.ownerUid) === uid;
+        return {
+          ...p,
+          isOwner,
+          canEdit: isOwner || (Array.isArray(p.sharedWith) && p.sharedWith.includes(uid)),
+        };
       })
       .sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 
@@ -135,7 +175,6 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       ownerUid: uid,
       ownerEmail: req.user?.email ?? null,
       sharedWith: [],
-      shareLog: [],
       projectType,
       name,
       description: description || null,
@@ -143,6 +182,10 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       updatedAt: now,
       board: defaultBoard(now, projectType),
       driveFolderOverrideId: null,
+      hourlyRate:
+        req.body?.hourlyRate !== undefined && req.body?.hourlyRate !== null && !Number.isNaN(Number(req.body.hourlyRate))
+          ? Math.min(Math.max(Number(req.body.hourlyRate), 0), 1000000)
+          : null,
     };
 
     const doc = await col.add(payload);
@@ -175,6 +218,12 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     if (req.body?.driveFolderOverrideId !== undefined) {
       patch.driveFolderOverrideId = String(req.body.driveFolderOverrideId ?? '').trim() || null;
     }
+    if (req.body?.hourlyRate !== undefined) {
+      patch.hourlyRate =
+        req.body.hourlyRate !== null && req.body.hourlyRate !== undefined && !Number.isNaN(Number(req.body.hourlyRate))
+          ? Math.min(Math.max(Number(req.body.hourlyRate), 0), 1000000)
+          : null;
+    }
 
     await ref.set(patch, { merge: true });
 
@@ -188,6 +237,36 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     });
 
     return res.json({ ok: true });
+  });
+
+  // Share project with other users (owner only)
+  r.put('/:id/share', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
+    const uid = req.user!.uid;
+    const id = req.params.id;
+    const ref = col.doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Not found' });
+    const data = snap.data() as any;
+    if ((data?.ownerUid ?? null) !== uid) return res.status(403).json({ error: 'Forbidden' });
+
+    const uids = Array.isArray(req.body?.uids) ? req.body.uids.filter((x: any) => typeof x === 'string') : [];
+    const emails = Array.isArray(req.body?.emails) ? req.body.emails.filter((x: any) => typeof x === 'string') : [];
+
+    const resolved = await resolveEmailsToUids(opts.fbAuth, emails);
+    const merged = Array.from(new Set([...uids, ...resolved.uids].filter((x) => x && x !== uid))).slice(0, 50);
+
+    await ref.set({ sharedWith: merged, updatedAt: new Date().toISOString() }, { merge: true });
+
+    await auditFirestore(opts.fbDb, opts.logger, {
+      action: 'project_share_update',
+      uid,
+      email: req.user?.email,
+      ip: getIp(req),
+      userAgent: (req as any).headers['user-agent'],
+      details: { id, sharedWith: merged.length, unresolvedEmails: resolved.unresolved },
+    });
+
+    return res.json({ ok: true, sharedWith: merged, unresolvedEmails: resolved.unresolved });
   });
 
   // Delete project
@@ -222,11 +301,13 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: 'Not found' });
     const data = snap.data() as any;
-    if ((data?.ownerUid ?? null) !== uid) return res.status(403).json({ error: 'Forbidden' });
+    const isOwner = (data?.ownerUid ?? null) === uid;
+    const canEdit = isOwner || (Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid));
+    if (!canEdit) return res.status(403).json({ error: 'Forbidden' });
 
     const projectType = (data?.projectType === 'general' ? 'general' : 'sap') as 'sap' | 'general';
     const board = data?.board ?? defaultBoard(new Date().toISOString(), projectType);
-    return res.json({ board });
+    return res.json({ board, meta: { isOwner, canEdit, ownerEmail: data?.ownerEmail ?? null } });
   });
 
   // Save project board
@@ -237,7 +318,9 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: 'Not found' });
     const data = snap.data() as any;
-    if ((data?.ownerUid ?? null) !== uid) return res.status(403).json({ error: 'Forbidden' });
+    const isOwner = (data?.ownerUid ?? null) === uid;
+    const canEdit = isOwner || (Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid));
+    if (!canEdit) return res.status(403).json({ error: 'Forbidden' });
 
     const incoming = req.body?.board;
     if (!incoming || typeof incoming !== 'object') return res.status(400).json({ error: 'board is required' });
@@ -247,7 +330,14 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     // Minimal validation / normalization
     const normColumns: KanbanColumn[] = columns
       .filter((c: any) => c && typeof c.id === 'string' && typeof c.title === 'string')
-      .map((c: any) => ({ id: c.id.slice(0, 64), title: c.title.slice(0, 64) }));
+      .map((c: any) => ({
+        id: c.id.slice(0, 64),
+        title: c.title.slice(0, 64),
+        wipLimit:
+          c.wipLimit !== undefined && c.wipLimit !== null && !Number.isNaN(Number(c.wipLimit))
+            ? Math.min(Math.max(Number(c.wipLimit), 0), 999)
+            : null,
+      }));
 
     const now = new Date().toISOString();
     const normCards: KanbanCard[] = cards
@@ -256,6 +346,25 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
         id: c.id.slice(0, 64),
         columnId: c.columnId.slice(0, 64),
         title: c.title.slice(0, 120),
+        order:
+          c.order !== undefined && c.order !== null && !Number.isNaN(Number(c.order))
+            ? Math.min(Math.max(Number(c.order), -1000000), 1000000)
+            : null,
+        priority:
+          (c.priority === 'low' || c.priority === 'med' || c.priority === 'high' || c.priority === 'urgent') ? c.priority : null,
+        dueDate: typeof c.dueDate === 'string' ? c.dueDate.slice(0, 32) : null,
+        checklist: Array.isArray(c.checklist)
+          ? c.checklist
+              .filter((x: any) => x && typeof x.text === 'string')
+              .map((x: any) => ({
+                id: typeof x.id === 'string' ? x.id.slice(0, 64) : `i_${Math.random().toString(36).slice(2, 10)}`,
+                text: String(x.text).slice(0, 240),
+                done: Boolean(x.done),
+              }))
+              .slice(0, 50)
+          : null,
+        color:
+          (c.color === 'yellow' || c.color === 'blue' || c.color === 'green' || c.color === 'pink' || c.color === 'white') ? c.color : null,
         description: c.description ? String(c.description).slice(0, 2000) : null,
         estimateHours:
           c.estimateHours !== undefined && c.estimateHours !== null && !Number.isNaN(Number(c.estimateHours))
@@ -290,124 +399,10 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       email: req.user?.email,
       ip: getIp(req),
       userAgent: (req as any).headers['user-agent'],
-      details: { id, columns: normColumns.length, cards: normCards.length },
+      details: { id, columns: normColumns.length, cards: normCards.length, isOwner },
     });
 
     return res.json({ ok: true });
-  });
-
-
-  // Share project with other users (by uid and/or email)
-  r.post('/:id/share', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
-    const uid = req.user!.uid;
-    const id = req.params.id;
-    const ref = col.doc(id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: 'Not found' });
-    const data = snap.data() as any;
-    if ((data?.ownerUid ?? null) !== uid) return res.status(403).json({ error: 'Forbidden' });
-
-    const uids: string[] = Array.isArray(req.body?.uids) ? req.body.uids.filter((x: any) => typeof x === 'string') : [];
-    const emails: string[] = Array.isArray(req.body?.emails) ? req.body.emails.filter((x: any) => typeof x === 'string') : [];
-
-    const resolved: Array<{ uid: string; email?: string | null }> = [];
-    for (const u of uids) {
-      const clean = String(u).trim();
-      if (clean) resolved.push({ uid: clean });
-    }
-    for (const e of emails) {
-      const email = String(e).trim().toLowerCase();
-      if (!email) continue;
-      try {
-        const u = await opts.fbAuth.getUserByEmail(email);
-        resolved.push({ uid: u.uid, email: u.email ?? email });
-      } catch {
-        return res.status(400).json({ error: `Usuário não encontrado para o e-mail: ${email}` });
-      }
-    }
-
-    const now = new Date().toISOString();
-    const existing = Array.isArray(data?.sharedWith) ? data.sharedWith.filter((x: any) => typeof x === 'string') : [];
-    const merged = Array.from(new Set(existing.concat(resolved.map((x) => x.uid)).filter((x) => x && x !== uid)));
-
-    const log = Array.isArray(data?.shareLog) ? data.shareLog : [];
-    const addedLogs = resolved.map((x) => ({
-      at: now,
-      byUid: uid,
-      byEmail: req.user?.email ?? null,
-      toUid: x.uid,
-      toEmail: x.email ?? null,
-    }));
-
-    await ref.set({ sharedWith: merged, shareLog: log.concat(addedLogs).slice(-300), updatedAt: now }, { merge: true });
-
-    await auditFirestore(opts.fbDb, opts.logger, {
-      action: 'project_share',
-      uid,
-      email: req.user?.email,
-      ip: getIp(req),
-      userAgent: (req as any).headers['user-agent'],
-      details: { id, sharedWith: merged.length },
-    });
-
-    return res.json({ ok: true, sharedWith: merged });
-  });
-
-  // Stickies (post-its) for analog reminders
-  r.get('/:id/stickies', auth, async (req: AuthedRequest, res) => {
-    const uid = req.user!.uid;
-    const id = req.params.id;
-    const ref = col.doc(id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: 'Not found' });
-    const data = snap.data() as any;
-    if ((data?.ownerUid ?? null) !== uid && !(Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid))) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    const stickies = Array.isArray(data?.stickies) ? data.stickies : [];
-    return res.json({ stickies });
-  });
-
-  r.put('/:id/stickies', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
-    const uid = req.user!.uid;
-    const id = req.params.id;
-    const ref = col.doc(id);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: 'Not found' });
-    const data = snap.data() as any;
-    if ((data?.ownerUid ?? null) !== uid && !(Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid))) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    const incoming = Array.isArray(req.body?.stickies) ? req.body.stickies : [];
-    const now = new Date().toISOString();
-    const stickies = incoming
-      .filter((s: any) => s && typeof s.id === 'string' && typeof s.text === 'string')
-      .map((s: any) => ({
-        id: String(s.id).slice(0, 64),
-        text: String(s.text).slice(0, 2000),
-        color: (['yellow','pink','blue','green','purple'].includes(String(s.color)) ? String(s.color) : 'yellow'),
-        x: Number.isFinite(Number(s.x)) ? Math.max(0, Math.min(Number(s.x), 2000)) : 0,
-        y: Number.isFinite(Number(s.y)) ? Math.max(0, Math.min(Number(s.y), 2000)) : 0,
-        rotation: Number.isFinite(Number(s.rotation)) ? Math.max(-8, Math.min(Number(s.rotation), 8)) : 0,
-        updatedAt: now,
-        createdAt: typeof s.createdAt === 'string' ? s.createdAt : now,
-        createdBy: typeof s.createdBy === 'string' ? s.createdBy : uid,
-      }))
-      .slice(0, 100);
-
-    await ref.set({ stickies, updatedAt: now }, { merge: true });
-
-    await auditFirestore(opts.fbDb, opts.logger, {
-      action: 'project_stickies_update',
-      uid,
-      email: req.user?.email,
-      ip: getIp(req),
-      userAgent: (req as any).headers['user-agent'],
-      details: { id, count: stickies.length },
-    });
-
-    return res.json({ ok: true, stickies });
   });
 
   return r;

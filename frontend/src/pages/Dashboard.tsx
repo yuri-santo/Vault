@@ -7,8 +7,6 @@ import {
   browseDrive,
   createProject,
   deleteDriveFile,
-  moveDriveFile,
-  uploadDriveFile,
   deleteEntry,
   deleteProject,
   getDriveSettings,
@@ -25,14 +23,12 @@ import {
   listProjects,
   saveNotes,
   saveProjectBoard,
+  shareProject,
   sendInvite,
   setDriveFolder,
   updateEntry,
   updateEntryShare,
   updateProject,
-  shareProject,
-  getProjectStickies,
-  saveProjectStickies,
   type DriveFile,
   type DriveItem,
   type Project,
@@ -41,7 +37,6 @@ import {
   type ShareInvite,
   type VaultEntry,
   type NoteItem,
-  type StickyNote,
 } from '../lib/api';
 import { Modal } from '../components/modal';
 import { useToast } from '../components/toast';
@@ -287,15 +282,6 @@ function EntryActions({
   useOutsideClick(boxRef, () => setOpen(false));
   const { push } = useToast();
 
-  function parseApiError(err: any, fallback: string) {
-    const e = err?.response?.data?.error;
-    if (typeof e === 'string') return e;
-    if (e?.message) return String(e.message);
-    if (err?.message) return String(err.message);
-    return fallback;
-  }
-
-
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
     push(`${label} copiado ✅`, 'success');
@@ -449,15 +435,6 @@ function EntryInlineActions({
 }) {
   const { push } = useToast();
 
-  function parseApiError(err: any, fallback: string) {
-    const e = err?.response?.data?.error;
-    if (typeof e === 'string') return e;
-    if (e?.message) return String(e.message);
-    if (err?.message) return String(err.message);
-    return fallback;
-  }
-
-
   async function copyPassword() {
     if (!entry.password) return;
     await navigator.clipboard.writeText(entry.password);
@@ -480,6 +457,13 @@ function EntryInlineActions({
         onClick={onRevealToggle}
       >
         <Icon name="eye" className="h-4 w-4" />
+      </IconActionButton>
+
+      <IconActionButton
+        title="Ver detalhes"
+        onClick={onView}
+      >
+        <Icon name="info" className="h-4 w-4" />
       </IconActionButton>
 
       <IconActionButton
@@ -526,15 +510,6 @@ export default function Dashboard({
   onLogout: () => void;
 }) {
   const { push } = useToast();
-
-  function parseApiError(err: any, fallback: string) {
-    const e = err?.response?.data?.error;
-    if (typeof e === 'string') return e;
-    if (e?.message) return String(e.message);
-    if (err?.message) return String(err.message);
-    return fallback;
-  }
-
 
   const [section, setSection] = useState<Section>('vault');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -645,13 +620,6 @@ export default function Dashboard({
   const [driveItems, setDriveItems] = useState<DriveItem[]>([]);
   const [driveExplorerLoading, setDriveExplorerLoading] = useState(false);
 
-  // Drive Upload/Move
-  const [driveUploadOpen, setDriveUploadOpen] = useState(false);
-  const [driveUploadFolderLink, setDriveUploadFolderLink] = useState('');
-  const [driveMoveOpen, setDriveMoveOpen] = useState(false);
-  const [driveMoveItem, setDriveMoveItem] = useState<DriveItem | null>(null);
-  const [driveMoveDest, setDriveMoveDest] = useState('');
-
   // Projects / Kanban
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -662,8 +630,15 @@ export default function Dashboard({
   const [cardEdit, setCardEdit] = useState({
     title: '',
     description: '',
-    type: 'task',
+          type:
+            newCardType === 'note'
+              ? 'note'
+              : ((projects.find((p) => p.id === activeProjectId)?.projectType ?? 'general') as any),
     estimateHours: '',
+    priority: 'med',
+    dueDate: '',
+    checklistText: '',
+    color: 'yellow',
     qaNotes: '',
     prodNotes: '',
     tags: '',
@@ -678,21 +653,24 @@ export default function Dashboard({
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [newProjectType, setNewProjectType] = useState<'sap' | 'general'>('sap');
   const [newProjectHourlyRate, setNewProjectHourlyRate] = useState('');
+
+  // Project sharing (owner-only)
+  const [projectShareModalOpen, setProjectShareModalOpen] = useState(false);
+  const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
+  const [projectShareEmails, setProjectShareEmails] = useState('');
+  const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<string[]>([]);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [newCardDesc, setNewCardDesc] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
+  const [newCardColor, setNewCardColor] = useState<'yellow' | 'blue' | 'green' | 'pink' | 'white'>('yellow');
+  const [newCardType, setNewCardType] = useState<'task' | 'note'>('task');
 
-  // Project sharing
-  const [projectShareOpen, setProjectShareOpen] = useState(false);
-  const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
-  const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<Record<string, boolean>>({});
-  const [projectShareExtraEmails, setProjectShareExtraEmails] = useState('');
-
-  // Post-its (stickies)
-  const [projectStickies, setProjectStickies] = useState<StickyNote[]>([]);
-  const [stickiesLoading, setStickiesLoading] = useState(false);
-  const stickiesSaveTimer = useRef<any>(null);
-  const stickyDragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  // Kanban (UI)
+  const boardWrapRef = useRef<HTMLDivElement | null>(null);
+  const [boardZoom, setBoardZoom] = useState(1);
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
 
   // Notes
   const [notes, setNotes] = useState('');
@@ -730,6 +708,8 @@ export default function Dashboard({
       setDriveEnabled(Boolean(driveCfg.enabled));
       setDriveUploadEnabled(Boolean(driveCfg.uploadEnabled));
       setDriveOpenUrl(driveCfg.openUrl ?? null);
+      // Keep the saved Drive folder link/ID visible in the input
+      setDriveFolderState((driveCfg.openUrl ?? driveCfg.folderId ?? '') as any);
       setDriveNeedsSetup(Boolean((driveList as any).needsSetup));
       setDriveFiles((driveList as any).files ?? []);
 
@@ -792,20 +772,6 @@ export default function Dashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
 
-
-  useEffect(() => {
-    if (!activeProjectId) {
-      setProjectStickies([]);
-      return;
-    }
-    setStickiesLoading(true);
-    getProjectStickies(activeProjectId)
-      .then((res) => setProjectStickies(res.stickies ?? []))
-      .catch(() => setProjectStickies([]))
-      .finally(() => setStickiesLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProjectId]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return entries.filter((e) => {
@@ -839,6 +805,33 @@ export default function Dashboard({
     const shared = entries.filter((e) => e.isShared).length;
     return { total, editable, shared };
   }, [entries]);
+
+  const activeProject = useMemo(
+    () => (activeProjectId ? projects.find((p) => p.id === activeProjectId) || null : null),
+    [projects, activeProjectId]
+  );
+
+  // Debounced save for Kanban (helps with drag/drop)
+  const kanbanSaveTimer = useRef<any>(null);
+  const lastBoardRef = useRef<ProjectBoard | null>(null);
+
+  async function persistKanbanBoard(board: ProjectBoard) {
+    if (!activeProjectId) return;
+    try {
+      await saveProjectBoard(activeProjectId, board);
+      lastBoardRef.current = board;
+    } catch (err) {
+      push('Falha ao salvar quadro (verifique conexão/CSRF)', 'error');
+    }
+  }
+
+  function setBoardAndScheduleSave(next: ProjectBoard) {
+    setProjectBoard(next);
+    if (kanbanSaveTimer.current) clearTimeout(kanbanSaveTimer.current);
+    kanbanSaveTimer.current = setTimeout(() => {
+      persistKanbanBoard(next);
+    }, 800);
+  }
 
   function openNew() {
     setEditing(null);
@@ -1113,112 +1106,31 @@ export default function Dashboard({
   }
 
   async function saveBoard(next: ProjectBoard) {
-    setProjectBoard(next);
-    if (!activeProjectId) return;
-    try {
-      await saveProjectBoard(activeProjectId, next);
-    } catch {
-      push('Falha ao salvar board', 'error');
+    setBoardAndScheduleSave(next);
+  }
+
+  function normalizeOrders(board: ProjectBoard): ProjectBoard {
+    // Ensure a stable order inside each column (used by drag/drop)
+    const byCol: Record<string, KanbanCard[]> = {};
+    for (const c of board.cards) {
+      (byCol[c.columnId] = byCol[c.columnId] || []).push(c);
     }
-  }
-
-  function scheduleSaveStickies(next: StickyNote[]) {
-    setProjectStickies(next);
-    if (!activeProjectId) return;
-    if (stickiesSaveTimer.current) clearTimeout(stickiesSaveTimer.current);
-    stickiesSaveTimer.current = setTimeout(async () => {
-      try {
-        await saveProjectStickies(activeProjectId, next);
-      } catch (e: any) {
-        push(parseApiError(e, 'Falha ao salvar post-its'), 'error');
-      }
-    }, 700);
-  }
-
-  async function openProjectShare(project: Project) {
-    setProjectShareTarget(project);
-    setProjectShareSelectedUids({});
-    setProjectShareExtraEmails('');
-    setProjectShareOpen(true);
-  }
-
-  async function confirmProjectShare() {
-    if (!projectShareTarget) return;
-    const uids = Object.entries(projectShareSelectedUids).filter(([, v]) => v).map(([k]) => k);
-    const emails = projectShareExtraEmails
-      .split(/[\n,;]/)
-      .map((x) => x.trim())
-      .filter(Boolean);
-    if (uids.length === 0 && emails.length === 0) return push('Selecione um usuário ou informe um e-mail', 'error');
-
-    try {
-      await shareProject(projectShareTarget.id, { uids, emails });
-      push('Projeto compartilhado ✅', 'success');
-      setProjectShareOpen(false);
-      // reload projects
-      const projs = await listProjects().catch(() => ({ projects: [] } as any));
-      setProjects((projs as any).projects ?? []);
-    } catch (e: any) {
-      push(parseApiError(e, 'Falha ao compartilhar projeto'), 'error');
+    const nextCards: KanbanCard[] = [];
+    for (const col of board.columns) {
+      const list = (byCol[col.id] || []).slice().sort((a, b) => {
+        const oa = typeof a.order === 'number' ? a.order : Number.POSITIVE_INFINITY;
+        const ob = typeof b.order === 'number' ? b.order : Number.POSITIVE_INFINITY;
+        if (oa !== ob) return oa - ob;
+        return String(a.createdAt).localeCompare(String(b.createdAt));
+      });
+      list.forEach((card, idx) => nextCards.push({ ...card, order: idx * 10 }));
     }
+    // Include cards that reference unknown columns (fallback)
+    const known = new Set(board.columns.map((c) => c.id));
+    const leftovers = board.cards.filter((c) => !known.has(c.columnId));
+    leftovers.forEach((c, idx) => nextCards.push({ ...c, order: (c.order ?? 0) + idx }));
+    return { ...board, cards: nextCards };
   }
-
-  function newSticky() {
-    const id = `s_${Math.random().toString(36).slice(2, 10)}`;
-    const rot = Math.round((Math.random() * 10 - 5));
-    const colors: any[] = ['yellow', 'pink', 'blue', 'green', 'purple'];
-    const color = colors[Math.floor(Math.random() * colors.length)];
-    const now = new Date().toISOString();
-    const next = [
-      ...projectStickies,
-      { id, text: 'Novo lembrete...', color, x: 30 + projectStickies.length * 18, y: 20 + projectStickies.length * 10, rotation: rot, createdAt: now, updatedAt: now },
-    ];
-    scheduleSaveStickies(next);
-  }
-
-  function updateSticky(id: string, patch: Partial<StickyNote>) {
-    const now = new Date().toISOString();
-    const next = projectStickies.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: now } : s));
-    scheduleSaveStickies(next);
-  }
-
-  function removeSticky(id: string) {
-    const next = projectStickies.filter((s) => s.id !== id);
-    scheduleSaveStickies(next);
-  }
-
-
-  function onStickyPointerDown(e: React.PointerEvent<HTMLDivElement>, id: string) {
-    const s = projectStickies.find((x) => x.id === id);
-    if (!s) return;
-    (e.currentTarget as any).setPointerCapture?.(e.pointerId);
-    stickyDragRef.current = {
-      id,
-      startX: e.clientX,
-      startY: e.clientY,
-      originX: Number(s.x ?? 0),
-      originY: Number(s.y ?? 0),
-    };
-  }
-
-  function onStickyPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    const d = stickyDragRef.current;
-    if (!d) return;
-    const dx = e.clientX - d.startX;
-    const dy = e.clientY - d.startY;
-    const next = projectStickies.map((s) =>
-      s.id === d.id ? { ...s, x: Math.max(0, Math.min((d.originX + dx), 1200)), y: Math.max(0, Math.min((d.originY + dy), 600)) } : s
-    );
-    setProjectStickies(next);
-  }
-
-  function onStickyPointerUp() {
-    if (!stickyDragRef.current) return;
-    stickyDragRef.current = null;
-    scheduleSaveStickies(projectStickies);
-  }
-
-
 
   async function addKanbanCard(columnId: string) {
     if (!projectBoard) return;
@@ -1230,7 +1142,17 @@ export default function Dashboard({
       ...projectBoard,
       cards: [
         ...projectBoard.cards,
-        { id, columnId, title, description: newCardDesc.trim() || null, createdAt: now, updatedAt: now },
+        {
+          id,
+          columnId,
+          title,
+          description: newCardDesc.trim() || null,
+          type: (projects.find((x) => x.id === activeProjectId)?.projectType ?? 'sap') as any,
+          color: newCardColor,
+          order: (projectBoard.cards.filter((c) => c.columnId === columnId).length ?? 0) * 10,
+          createdAt: now,
+          updatedAt: now,
+        },
       ],
     };
     setNewCardTitle('');
@@ -1241,17 +1163,44 @@ export default function Dashboard({
   async function moveKanbanCard(cardId: string, columnId: string) {
     if (!projectBoard) return;
     const now = new Date().toISOString();
-    const next: ProjectBoard = {
+    const count = projectBoard.cards.filter((c) => c.columnId === columnId).length;
+    const nextRaw: ProjectBoard = {
       ...projectBoard,
-      cards: projectBoard.cards.map((c) => (c.id === cardId ? { ...c, columnId, updatedAt: now } : c)),
+      cards: projectBoard.cards.map((c) =>
+        c.id === cardId ? { ...c, columnId, order: count * 10, updatedAt: now } : c
+      ),
     };
-    await saveBoard(next);
+    await saveBoard(normalizeOrders(nextRaw));
   }
 
   async function deleteKanbanCard(cardId: string) {
     if (!projectBoard) return;
     const next: ProjectBoard = { ...projectBoard, cards: projectBoard.cards.filter((c) => c.id !== cardId) };
-    await saveBoard(next);
+    await saveBoard(normalizeOrders(next));
+  }
+
+  function dropCardToColumn(cardId: string, columnId: string, beforeCardId?: string) {
+    if (!projectBoard) return;
+    const now = new Date().toISOString();
+    const moving = projectBoard.cards.find((c) => c.id === cardId);
+    if (!moving) return;
+
+    const updatedMoving: KanbanCard = { ...moving, columnId, updatedAt: now };
+    const without = projectBoard.cards.filter((c) => c.id !== cardId);
+
+    let nextCards = without;
+    if (beforeCardId) {
+      const idx = without.findIndex((c) => c.id === beforeCardId);
+      if (idx >= 0) {
+        nextCards = [...without.slice(0, idx), updatedMoving, ...without.slice(idx)];
+      } else {
+        nextCards = [...without, updatedMoving];
+      }
+    } else {
+      nextCards = [...without, updatedMoving];
+    }
+
+    setBoardAndScheduleSave(normalizeOrders({ ...projectBoard, cards: nextCards }));
   }
 
   function openCard(card: KanbanCard) {
@@ -1261,6 +1210,12 @@ export default function Dashboard({
       description: (card.description ?? '') as any,
       type: (card.type ?? 'task') as any,
       estimateHours: card.estimateHours != null ? String(card.estimateHours) : '',
+      priority: (card.priority ?? 'med') as any,
+      dueDate: (card.dueDate ?? '') as any,
+      checklistText: Array.isArray(card.checklist)
+        ? card.checklist.map((i) => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n')
+        : '',
+      color: (card.color ?? 'yellow') as any,
       qaNotes: (card.qaNotes ?? '') as any,
       prodNotes: (card.prodNotes ?? '') as any,
       tags: Array.isArray(card.tags) ? card.tags.join(', ') : '',
@@ -1277,12 +1232,32 @@ export default function Dashboard({
     if (!projectBoard || !activeProjectId || !activeCard) return;
     const now = new Date().toISOString();
     const est = parseFloat(String(cardEdit.estimateHours).replace(',', '.'));
+    const priority = (cardEdit as any).priority ?? 'med';
+    const dueDateRaw = String((cardEdit as any).dueDate ?? '').trim();
+    const color = (cardEdit as any).color ?? 'yellow';
+    const checklistText = String((cardEdit as any).checklistText ?? '').trim();
+    const checklist = checklistText
+      ? checklistText
+          .split(/\r?\n/g)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .slice(0, 30)
+          .map((line, idx) => {
+            const done = /^\[x\]/i.test(line) || /^-\s*\[x\]/i.test(line);
+            const text = line.replace(/^(-\s*)?\[[x \]]\]\s*/i, '').slice(0, 140) || `Item ${idx + 1}`;
+            return { id: `i_${idx}_${Math.random().toString(36).slice(2, 7)}`, text, done };
+          })
+      : null;
     const nextCard: KanbanCard = {
       ...activeCard,
       title: cardEdit.title.trim() || activeCard.title,
       description: cardEdit.description?.trim() ? cardEdit.description.trim() : null,
       type: cardEdit.type as any,
       estimateHours: isFinite(est) ? est : null,
+      priority: (['low', 'med', 'high', 'urgent'].includes(priority) ? priority : 'med') as any,
+      dueDate: dueDateRaw || null,
+      checklist,
+      color: (['yellow', 'blue', 'green', 'pink', 'white'].includes(color) ? color : 'yellow') as any,
       qaNotes: cardEdit.qaNotes?.trim() ? cardEdit.qaNotes.trim() : null,
       prodNotes: cardEdit.prodNotes?.trim() ? cardEdit.prodNotes.trim() : null,
       tags: cardEdit.tags
@@ -1979,14 +1954,9 @@ export default function Dashboard({
                       <div className="text-xs font-semibold text-zinc-600">Explorer (estilo Finder)</div>
                       <div className="text-xs text-zinc-500">Navegue pelas pastas do link salvo (pastas e arquivos).</div>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                    <Button variant="secondary" onClick={() => setDriveUploadOpen(true)} disabled={!driveEnabled || driveNeedsSetup}>
-                      Enviar arquivo
-                    </Button>
                     <Button variant="secondary" onClick={openDriveRoot} disabled={driveExplorerLoading || driveNeedsSetup}>
                       Abrir raiz
                     </Button>
-                    </div>
                   </div>
 
                   <div className="mt-2 rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm p-4">
@@ -2049,19 +2019,6 @@ export default function Dashboard({
                                   >
                                     Copiar link
                                   </Button>
-                                  {!it.isFolder && (
-                                    <Button
-                                      variant="secondary"
-                                      onClick={() => {
-                                        setDriveMoveItem(it);
-                                        setDriveMoveDest(driveFolder);
-                                        setDriveMoveOpen(true);
-                                      }}
-                                      disabled={!driveEnabled}
-                                    >
-                                      Mover
-                                    </Button>
-                                  )}
                                 </div>
                               </div>
                             ))
@@ -2130,36 +2087,38 @@ export default function Dashboard({
                             )}
                           >
                             <button type="button" className="min-w-0 text-left flex-1" onClick={() => setActiveProjectId(p.id)}>
-                              <div className="text-sm font-medium truncate flex items-center gap-2">
-                                <span className="truncate">{p.name}</span>
-                                {p._access === 'shared' && (
-                                  <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">
-                                    Compartilhado
-                                  </span>
-                                )}
-                              </div>
+                              <div className="text-sm font-medium truncate">{p.name}</div>
                               <div className="text-xs text-zinc-500 truncate">
                                 Atualizado: {new Date(p.updatedAt).toLocaleDateString()}
-                                {p._access === 'shared' && p.ownerEmail ? ` • por ${p.ownerEmail}` : ''}
+                                {!p.isOwner && p.ownerEmail ? ` • Compartilhado por ${p.ownerEmail}` : ''}
                               </div>
                             </button>
-
-                            <div className="flex items-center gap-1 flex-wrap justify-end">
-                              {p._access !== 'shared' && (
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {p.isOwner ? (
                                 <button
                                   type="button"
                                   className="text-zinc-400 hover:text-violet-700"
-                                  onClick={() => openProjectShare(p)}
+                                  onClick={() => {
+                                    setProjectShareTarget(p);
+                                    setProjectShareEmails('');
+                                    setProjectShareSelectedUids([]);
+                                    setProjectShareModalOpen(true);
+                                  }}
                                   title="Compartilhar"
                                 >
                                   <Icon name="share" className="h-4 w-4" />
                                 </button>
-                              )}
-                              {p._access !== 'shared' && (
-                                <button type="button" className="text-zinc-400 hover:text-red-600" onClick={() => removeProject(p.id)} title="Excluir">
+                              ) : null}
+                              {p.isOwner ? (
+                                <button
+                                  type="button"
+                                  className="text-zinc-400 hover:text-red-600"
+                                  onClick={() => removeProject(p.id)}
+                                  title="Excluir"
+                                >
                                   <Icon name="trash" className="h-4 w-4" />
                                 </button>
-                              )}
+                              ) : null}
                             </div>
                           </div>
                         ))
@@ -2183,147 +2142,305 @@ export default function Dashboard({
                     ) : !projectBoard ? (
                       <div className="text-sm text-zinc-500">Carregando board...</div>
                     ) : (
-                      <div className="min-w-[880px]">
-                        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-                          <div className="text-sm text-zinc-600">
-                            {projects.find((pp) => pp.id === activeProjectId)?._access === 'shared' ? (
-                              <span>
-                                Acompanhando projeto compartilhado{projects.find((pp) => pp.id === activeProjectId)?.ownerEmail ? ` por ${projects.find((pp) => pp.id === activeProjectId)?.ownerEmail}` : ''}.
-                              </span>
+                      <div className="rounded-3xl border border-zinc-200/70 bg-white/60 backdrop-blur shadow-sm">
+                        <div className="flex items-center justify-between gap-3 p-4 border-b border-zinc-200/60">
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">Jira completo (analógico)</div>
+                            {activeProject && !activeProject.isOwner && activeProject.ownerEmail ? (
+                              <div className="text-xs text-zinc-500 truncate">Compartilhado por {activeProject.ownerEmail}</div>
                             ) : (
-                              <span>Gerencie seu fluxo com um Kanban estilo Jira + post-its.</span>
+                              <div className="text-xs text-zinc-500 truncate">Arraste cards entre colunas • Post-its • Zoom</div>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Button variant="secondary" onClick={newSticky}>
-                              <Icon name="plus" className="h-4 w-4" /> Post-it
-                            </Button>
-                            {projects.find((pp) => pp.id === activeProjectId)?._access !== 'shared' && (
-                              <Button variant="secondary" onClick={() => {
-                                const p = projects.find((pp) => pp.id === activeProjectId);
-                                if (p) openProjectShare(p);
-                              }}>
-                                <Icon name="share" className="h-4 w-4" /> Compartilhar
-                              </Button>
-                            )}
-                          </div>
-                        </div>
 
-                        <div className="mb-4 rounded-3xl border border-zinc-200/70 bg-gradient-to-b from-zinc-50 to-white p-4 relative overflow-hidden">
-                          <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <div>
-                              <div className="text-xs font-semibold text-zinc-600">Post-its (lembretes rápidos)</div>
-                              <div className="text-xs text-zinc-500">Arraste para organizar. Clique no texto para editar.</div>
-                            </div>
-                            {stickiesLoading ? <div className="text-xs text-zinc-500">Carregando…</div> : <div className="text-xs text-zinc-500">{projectStickies.length} itens</div>}
-                          </div>
-
-                          <div className="mt-3 relative h-[220px] rounded-2xl border border-zinc-200/60 bg-white/80 overflow-hidden">
-                            {projectStickies.length === 0 ? (
-                              <div className="h-full flex items-center justify-center text-sm text-zinc-500">Sem post-its. Clique em <b>Post-it</b> para criar.</div>
-                            ) : (
-                              projectStickies.map((s) => (
-                                <div
-                                  key={s.id}
-                                  className={cn(
-                                    'absolute w-[220px] max-w-[220px] rounded-2xl shadow-sm border border-zinc-200/70 p-3',
-                                    s.color === 'pink' && 'bg-pink-100',
-                                    s.color === 'blue' && 'bg-sky-100',
-                                    s.color === 'green' && 'bg-emerald-100',
-                                    s.color === 'purple' && 'bg-violet-100',
-                                    (!s.color || s.color === 'yellow') && 'bg-amber-100'
-                                  )}
-                                  style={{
-                                    left: `${Math.max(0, Math.min(Number(s.x ?? 0), 900))}px`,
-                                    top: `${Math.max(0, Math.min(Number(s.y ?? 0), 170))}px`,
-                                    transform: `rotate(${Number(s.rotation ?? 0)}deg)`,
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            {(activeProject?.canEdit ?? true) && (
+                              <>
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setNewCardTitle('🗒️ Post-it');
+                                    setNewCardDesc('');
+                                    setNewCardType('note');
+                                    setNewCardColor('yellow');
+                                    const col = projectBoard.columns[0]?.id ?? 'backlog';
+                                    setNewCardColumnId(col);
+                                    addKanbanCard(col);
                                   }}
-                                  onPointerDown={(e) => onStickyPointerDown(e, s.id)}
-                                  onPointerMove={onStickyPointerMove}
-                                  onPointerUp={onStickyPointerUp}
                                 >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="text-[11px] font-semibold text-zinc-700">Lembrete</div>
-                                    <button type="button" className="text-zinc-500 hover:text-red-700" onClick={(e) => { e.stopPropagation(); removeSticky(s.id); }} title="Excluir">
-                                      <Icon name="trash" className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                  <textarea
-                                    className="mt-2 w-full bg-transparent text-sm text-zinc-800 outline-none resize-none"
-                                    rows={5}
-                                    value={s.text}
-                                    onChange={(e) => updateSticky(s.id, { text: e.target.value })}
-                                  />
-                                  <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-600">
-                                    <button type="button" className="hover:text-zinc-900" onClick={() => updateSticky(s.id, { rotation: (Number(s.rotation ?? 0) + 2) })}>Girar</button>
-                                    <button type="button" className="hover:text-zinc-900" onClick={() => navigator.clipboard.writeText(s.text || '').then(() => push('Post-it copiado', 'success'))}>Copiar</button>
-                                  </div>
-                                </div>
-                              ))
+                                  + Post-it
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setNewCardTitle('Nova tarefa');
+                                    setNewCardDesc('');
+                                    setNewCardType('task');
+                                    setNewCardColor('white');
+                                    const col = projectBoard.columns[0]?.id ?? 'backlog';
+                                    setNewCardColumnId(col);
+                                    setNewCardModalOpen(true);
+                                  }}
+                                >
+                                  + Tarefa
+                                </Button>
+                              </>
                             )}
+                            <Button
+                              variant="secondary"
+                              onClick={() => setBoardZoom((z) => Math.max(0.6, Number((z - 0.1).toFixed(2))))}
+                              title="Zoom -"
+                            >
+                              -
+                            </Button>
+                            <div className="text-xs text-zinc-600 w-14 text-center">{Math.round(boardZoom * 100)}%</div>
+                            <Button
+                              variant="secondary"
+                              onClick={() => setBoardZoom((z) => Math.min(1.6, Number((z + 0.1).toFixed(2))))}
+                              title="Zoom +"
+                            >
+                              +
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                const wrap = boardWrapRef.current;
+                                if (!wrap) return;
+                                const colW = 420;
+                                const gap = 24;
+                                const pad = 48;
+                                const total = projectBoard.columns.length * colW + Math.max(0, projectBoard.columns.length - 1) * gap + pad * 2;
+                                const z = Math.min(1.3, Math.max(0.6, Number((wrap.clientWidth / total).toFixed(2))));
+                                setBoardZoom(z);
+                              }}
+                              title="Ajustar ao espaço"
+                            >
+                              Ajustar
+                            </Button>
+                            <Button variant="secondary" onClick={() => setBoardZoom(1)} title="Reset">
+                              Reset
+                            </Button>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-3">
-                          {projectBoard.columns.map((col) => (
-                            <div key={col.id} className="rounded-3xl border border-zinc-200/70 bg-zinc-50 p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="font-semibold text-sm">{col.title}</div>
-                                <div className="text-xs text-zinc-500">{projectBoard.cards.filter((c) => c.columnId === col.id).length}</div>
-                              </div>
+                        <div
+                          ref={boardWrapRef}
+                          className="relative h-[calc(100vh-360px)] min-h-[560px] overflow-auto rounded-b-3xl"
+                          style={{
+                            background:
+                              "radial-gradient(ellipse at top, rgba(255,255,255,0.55), rgba(0,0,0,0)) , repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 12px, rgba(0,0,0,0.03) 12px, rgba(0,0,0,0.03) 24px), linear-gradient(180deg, #2b2b2b 0%, #1f1f1f 100%)",
+                          }}
+                        >
+                          <div
+                            className="flex gap-6 p-12 w-fit"
+                            style={{ transform: `scale(${boardZoom})`, transformOrigin: '0 0' }}
+                          >
+                            {projectBoard.columns.map((col) => {
+                              const cards = projectBoard.cards
+                                .filter((c) => c.columnId === col.id)
+                                .sort((a, b) => (Number(a.order ?? 0) || 0) - (Number(b.order ?? 0) || 0));
 
-                              <div className="mt-3 space-y-2">
-                                {projectBoard.cards
-                                  .filter((c) => c.columnId === col.id)
-                                  .map((c) => (
-                                    <div key={c.id} className="rounded-2xl border border-zinc-200/70 bg-white p-3">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                          <div className="font-medium text-sm truncate">{c.title}</div>
-                                          {c.description ? <div className="text-xs text-zinc-600 mt-1 whitespace-pre-wrap">{c.description}</div> : null}
-                                          {c.estimateHours != null ? <div className="mt-2 text-[11px] text-zinc-500">⏱ {c.estimateHours}h</div> : null}
-                                        </div>
-                                        <button type="button" className="text-zinc-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); deleteKanbanCard(c.id); }} title="Excluir">
-                                          <Icon name="trash" className="h-4 w-4" />
-                                        </button>
-                                      </div>
+                              const isOver = dragOverColumnId === col.id;
+                              const wipLimit = col.wipLimit ?? null;
+                              const wipExceeded = wipLimit != null && wipLimit > 0 && cards.length > wipLimit;
 
-                                      <div className="mt-2 flex items-center justify-between gap-2">
-                                        <select
-                                          value={c.columnId}
-                                          onChange={(e) => { e.stopPropagation(); moveKanbanCard(c.id, e.target.value); }}
-                                          className="text-xs rounded-xl border border-zinc-200 bg-white px-2 py-1"
-                                        >
-                                          {projectBoard.columns.map((cc) => (
-                                            <option key={cc.id} value={cc.id}>
-                                              {cc.title}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <button
-                                          type="button"
-                                          className="text-xs text-violet-700 hover:text-violet-800 font-medium"
-                                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(c.title + (c.description ? `\n\n${c.description}` : '')).then(() => push('Card copiado', 'success')); }}
-                                        >
-                                          Copiar
-                                        </button>
+                              return (
+                                <div
+                                  key={col.id}
+                                  className={cn(
+                                    'w-[420px] shrink-0 rounded-3xl border border-white/10 bg-white/10 backdrop-blur p-4 shadow-sm',
+                                    isOver ? 'ring-2 ring-violet-400' : ''
+                                  )}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    setDragOverColumnId(col.id);
+                                  }}
+                                  onDragLeave={() => setDragOverColumnId(null)}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    const id = e.dataTransfer.getData('text/plain');
+                                    if (id) dropCardToColumn(id, col.id);
+                                    setDragOverColumnId(null);
+                                    setDragOverCardId(null);
+                                  }}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-semibold text-white truncate">{col.title}</div>
+                                      <div className={cn('text-xs mt-1', wipExceeded ? 'text-red-200' : 'text-white/70')}>
+                                        {cards.length}
+                                        {wipLimit ? ` / ${wipLimit} (WIP)` : ''}
                                       </div>
                                     </div>
-                                  ))}
-                              </div>
 
-                              <div className="mt-3 rounded-2xl border border-zinc-200/70 bg-white p-3">
-                                <div className="text-xs font-semibold text-zinc-600">Novo card</div>
-                                <div className="mt-2 space-y-2">
-                                  <Input value={newCardTitle} onChange={(e) => setNewCardTitle(e.target.value)} placeholder="Título" />
-                                  <Textarea value={newCardDesc} onChange={(e) => setNewCardDesc(e.target.value)} rows={2} placeholder="Descrição (opcional)" />
-                                  <Button variant="secondary" onClick={() => addKanbanCard(col.id)}>
-                                    Adicionar
-                                  </Button>
+                                    {activeProject?.isOwner ? (
+                                      <div className="flex items-center gap-2">
+                                        <div className="text-[11px] text-white/70">WIP</div>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          value={col.wipLimit ?? ''}
+                                          onChange={(e) => {
+                                            const v = e.target.value === '' ? null : Math.max(0, Number(e.target.value));
+                                            const next: ProjectBoard = {
+                                              ...projectBoard,
+                                              columns: projectBoard.columns.map((cc) => (cc.id === col.id ? { ...cc, wipLimit: v } : cc)),
+                                            };
+                                            setBoardAndScheduleSave(next);
+                                          }}
+                                          className="w-16 rounded-xl border border-white/20 bg-white/10 px-2 py-1 text-xs text-white outline-none"
+                                          title="Limite de WIP (0 = sem limite)"
+                                        />
+                                      </div>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="mt-4 space-y-4">
+                                    {cards.length === 0 ? (
+                                      <div className="text-xs text-white/60">Solte um card aqui.</div>
+                                    ) : null}
+
+                                    {cards.map((c) => {
+                                      const angle = postitAngle(c.id);
+                                      const isOverCard = dragOverCardId === c.id;
+                                      const color = (c.color ?? 'yellow') as any;
+                                      const bg =
+                                        color === 'blue'
+                                          ? 'bg-sky-100'
+                                          : color === 'green'
+                                          ? 'bg-emerald-100'
+                                          : color === 'pink'
+                                          ? 'bg-pink-100'
+                                          : color === 'white'
+                                          ? 'bg-white'
+                                          : 'bg-yellow-100';
+
+                                      return (
+                                        <div
+                                          key={c.id}
+                                          draggable
+                                          onDragStart={(e) => {
+                                            setDraggingCardId(c.id);
+                                            e.dataTransfer.setData('text/plain', c.id);
+                                            e.dataTransfer.effectAllowed = 'move';
+                                          }}
+                                          onDragEnd={() => {
+                                            setDraggingCardId(null);
+                                            setDragOverColumnId(null);
+                                            setDragOverCardId(null);
+                                          }}
+                                          onDragOver={(e) => {
+                                            e.preventDefault();
+                                            setDragOverCardId(c.id);
+                                          }}
+                                          onDrop={(e) => {
+                                            e.preventDefault();
+                                            const id = e.dataTransfer.getData('text/plain');
+                                            if (id) dropCardToColumn(id, col.id, c.id);
+                                            setDragOverCardId(null);
+                                            setDragOverColumnId(null);
+                                          }}
+                                          onClick={() => openCard(c)}
+                                          className={cn(
+                                            'cursor-pointer rounded-2xl border border-zinc-200/70 p-4 shadow-[0_10px_25px_rgba(0,0,0,0.35)]',
+                                            bg,
+                                            isOverCard ? 'ring-2 ring-violet-500' : ''
+                                          )}
+                                          style={{ transform: `rotate(${angle}deg)` }}
+                                          title="Clique para editar"
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <div className="font-semibold text-sm truncate text-zinc-900">{c.title}</div>
+                                              {c.description ? (
+                                                <div className="mt-1 text-xs text-zinc-700 whitespace-pre-wrap line-clamp-4">{c.description}</div>
+                                              ) : null}
+                                            </div>
+                                            <button
+                                              type="button"
+                                              className="text-zinc-400 hover:text-red-600 flex-shrink-0"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteKanbanCard(c.id);
+                                              }}
+                                              title="Excluir"
+                                            >
+                                              <Icon name="trash" className="h-4 w-4" />
+                                            </button>
+                                          </div>
+
+                                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                                            {c.priority ? (
+                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">
+                                                {c.priority === 'urgent'
+                                                  ? 'URG'
+                                                  : c.priority === 'high'
+                                                  ? 'ALTA'
+                                                  : c.priority === 'med'
+                                                  ? 'MÉD'
+                                                  : 'BAIX'}
+                                              </span>
+                                            ) : null}
+                                            {c.dueDate ? (
+                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">📅 {c.dueDate}</span>
+                                            ) : null}
+                                            {c.checklist && c.checklist.length ? (
+                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">
+                                                ☑ {c.checklist.filter((x) => x.done).length}/{c.checklist.length}
+                                              </span>
+                                            ) : null}
+                                            {c.estimateHours != null ? (
+                                              <span className="text-[11px] px-2 py-1 rounded-full bg-zinc-900/5 text-zinc-700">⏱ {c.estimateHours}h</span>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/10 p-3">
+                                    <div className="text-xs font-semibold text-white/80">Novo post-it</div>
+                                    <div className="mt-2 space-y-2">
+                                      <Input
+                                        value={newCardTitle}
+                                        onChange={(e) => setNewCardTitle(e.target.value)}
+                                        placeholder="Título"
+                                      />
+                                      <Textarea
+                                        value={newCardDesc}
+                                        onChange={(e) => setNewCardDesc(e.target.value)}
+                                        rows={2}
+                                        placeholder="Descrição (opcional)"
+                                      />
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="secondary"
+                                          onClick={() => {
+                                            setNewCardType('task');
+                                            setNewCardColor('white');
+                                            addKanbanCard(col.id);
+                                          }}
+                                        >
+                                          Adicionar
+                                        </Button>
+                                        <Button
+                                          variant="secondary"
+                                          onClick={() => {
+                                            // Quick reminder template
+                                            setNewCardTitle('Lembrete');
+                                            setNewCardDesc('- [ ] ...');
+                                          }}
+                                          title="Template checklist"
+                                        >
+                                          Template
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          ))}
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -3059,24 +3176,26 @@ export default function Dashboard({
 
       {/* Modal compartilhar projeto */}
       <Modal
-        open={projectShareOpen}
+        open={projectShareModalOpen}
         title={projectShareTarget ? `Compartilhar projeto: ${projectShareTarget.name}` : 'Compartilhar projeto'}
         onClose={() => {
-          setProjectShareOpen(false);
+          setProjectShareModalOpen(false);
           setProjectShareTarget(null);
         }}
       >
         <div className="text-sm text-zinc-600">
-          Selecione um usuário ou informe um e-mail. O projeto aparecerá na aba <b>Projetos</b> do outro usuário como <b>Compartilhado</b>.
+          Escolha quem vai acompanhar/editar o Kanban. Colaboradores conseguem <b>criar/editar/mover cards</b>, mas <b>não</b> conseguem excluir o projeto nem compartilhar com outras pessoas.
         </div>
 
         <div className="mt-4 space-y-2">
           <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
-            <div className="font-medium text-zinc-800">Adicionar por e-mail</div>
-            <div className="mt-1 text-xs text-zinc-500">Cole um ou mais e-mails (separados por vírgula, espaço ou linha).</div>
+            <div className="font-medium text-zinc-800">Adicionar por e-mail (opcional)</div>
+            <div className="mt-1 text-xs text-zinc-500">
+              Cole e-mails separados por vírgula, espaço ou linha. Apenas usuários já cadastrados no sistema serão encontrados.
+            </div>
             <Textarea
-              value={projectShareExtraEmails}
-              onChange={(e) => setProjectShareExtraEmails(e.target.value)}
+              value={projectShareEmails}
+              onChange={(e) => setProjectShareEmails(e.target.value)}
               rows={3}
               placeholder="ex.: consultor@empresa.com, time@cliente.com"
               className="mt-3 bg-white/90"
@@ -3089,7 +3208,7 @@ export default function Dashboard({
             </div>
           ) : (
             connections.map((c) => {
-              const checked = Boolean(projectShareSelectedUids[c.uid]);
+              const checked = projectShareSelectedUids.includes(c.uid);
               return (
                 <label key={c.uid} className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200/70 bg-white px-4 py-3">
                   <div className="min-w-0">
@@ -3099,7 +3218,10 @@ export default function Dashboard({
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={(e) => setProjectShareSelectedUids((prev) => ({ ...prev, [c.uid]: e.target.checked }))}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setProjectShareSelectedUids((prev) => (v ? [...prev, c.uid] : prev.filter((x) => x !== c.uid)));
+                    }}
                     className="h-4 w-4 accent-violet-600"
                   />
                 </label>
@@ -3109,116 +3231,37 @@ export default function Dashboard({
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-2">
-          <Button variant="secondary" onClick={() => setProjectShareOpen(false)}>
+          <Button variant="secondary" onClick={() => setProjectShareModalOpen(false)}>
             Cancelar
           </Button>
-          <Button onClick={confirmProjectShare}>Compartilhar</Button>
+          <Button
+            onClick={async () => {
+              if (!projectShareTarget) return;
+              try {
+                const emails = projectShareEmails
+                  .split(/[\s,;\n\r\t]+/g)
+                  .map((x) => x.trim())
+                  .filter(Boolean);
+                const uids = projectShareSelectedUids;
+                await shareProject(projectShareTarget.id, { emails, uids });
+                push('Projeto compartilhado ✅', 'success');
+                setProjectShareModalOpen(false);
+                setProjectShareTarget(null);
+                await refreshAll();
+              } catch (err: any) {
+                const invalid = err?.response?.data?.invalidEmails;
+                if (Array.isArray(invalid) && invalid.length) {
+                  push(`E-mails inválidos/não encontrados: ${invalid.join(', ')}`, 'error');
+                } else {
+                  const msg = err?.response?.data?.error || 'Falha ao compartilhar projeto';
+                  push(msg, 'error');
+                }
+              }
+            }}
+          >
+            Salvar compartilhamento
+          </Button>
         </div>
-      </Modal>
-
-      {/* Modal upload para Drive */}
-      <Modal
-        open={driveUploadOpen}
-        title="Enviar arquivo para o Google Drive"
-        onClose={() => setDriveUploadOpen(false)}
-      >
-        {!driveEnabled ? (
-          <div className="text-sm text-zinc-600">
-            Upload para Drive não está habilitado no servidor. Se você quiser usar essa função, configure a integração no back-end (OAuth token).
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-zinc-600">Destino (link/ID de pasta — opcional)</label>
-              <Input
-                value={driveUploadFolderLink}
-                onChange={(e) => setDriveUploadFolderLink(e.target.value)}
-                placeholder="Cole aqui o link compartilhado da pasta do Drive (opcional)"
-              />
-              <div className="mt-1 text-xs text-zinc-500">
-                Se você colar um link de pasta, o arquivo será enviado para ela (se a integração tiver permissão). Caso contrário, usa a pasta padrão configurada.
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-4">
-              <input
-                type="file"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    await uploadDriveFile(file, { folderLink: driveUploadFolderLink || undefined });
-                    push('Arquivo enviado ✅', 'success');
-                    setDriveUploadOpen(false);
-                    // refresh list
-                    if (drivePath.length === 1) {
-                      openDriveRoot();
-                    } else {
-                      const last = drivePath[drivePath.length - 1];
-                      if (last?.id) openDriveFolder(last.id, last.name);
-                    }
-                  } catch (err: any) {
-                    push(parseApiError(err, 'Falha ao enviar arquivo'), 'error');
-                  } finally {
-                    (e.target as any).value = '';
-                  }
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Modal mover arquivo no Drive */}
-      <Modal
-        open={driveMoveOpen}
-        title={driveMoveItem ? `Mover: ${driveMoveItem.name}` : 'Mover arquivo'}
-        onClose={() => {
-          setDriveMoveOpen(false);
-          setDriveMoveItem(null);
-        }}
-      >
-        {!driveEnabled ? (
-          <div className="text-sm text-zinc-600">
-            Mover arquivos não está habilitado no servidor. Configure a integração com o Google Drive (OAuth token) ou mova manualmente no Drive.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-zinc-600">Pasta destino (link/ID)</label>
-              <Input
-                value={driveMoveDest}
-                onChange={(e) => setDriveMoveDest(e.target.value)}
-                placeholder="Cole o link compartilhado da pasta destino"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="secondary" onClick={() => setDriveMoveOpen(false)}>Cancelar</Button>
-              <Button
-                onClick={async () => {
-                  if (!driveMoveItem) return;
-                  try {
-                    await moveDriveFile(driveMoveItem.id, driveMoveDest);
-                    push('Arquivo movido ✅', 'success');
-                    setDriveMoveOpen(false);
-                    setDriveMoveItem(null);
-                    // refresh current folder
-                    if (drivePath.length === 1) {
-                      openDriveRoot();
-                    } else {
-                      const last = drivePath[drivePath.length - 1];
-                      if (last?.id) openDriveFolder(last.id, last.name);
-                    }
-                  } catch (err: any) {
-                    push(parseApiError(err, 'Falha ao mover arquivo'), 'error');
-                  }
-                }}
-              >
-                Mover
-              </Button>
-            </div>
-          </div>
-        )}
       </Modal>
 
       {/* Modal detalhes da demanda (Kanban) */}
@@ -3267,6 +3310,56 @@ export default function Dashboard({
                   value={cardEdit.estimateHours}
                   onChange={(e) => setCardEdit((p: any) => ({ ...p, estimateHours: e.target.value }))}
                   placeholder="ex.: 3.5"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Prioridade</label>
+                <select
+                  value={(cardEdit as any).priority}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, priority: e.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="low">Baixa</option>
+                  <option value="med">Média</option>
+                  <option value="high">Alta</option>
+                  <option value="urgent">Urgente</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Prazo</label>
+                <Input
+                  type="date"
+                  value={(cardEdit as any).dueDate}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, dueDate: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-zinc-600">Cor do card</label>
+                <select
+                  value={(cardEdit as any).color}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, color: e.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="yellow">Post-it Amarelo</option>
+                  <option value="blue">Azul</option>
+                  <option value="green">Verde</option>
+                  <option value="pink">Rosa</option>
+                  <option value="white">Branco</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-zinc-600">Checklist</label>
+                <Textarea
+                  value={(cardEdit as any).checklistText}
+                  onChange={(e) => setCardEdit((p: any) => ({ ...p, checklistText: e.target.value }))}
+                  placeholder="Use uma linha por item. Marque como [x] para concluído.\nEx.:\n[ ] Ajustar nota\n[x] Validar QA"
+                  rows={4}
                   className="mt-1"
                 />
               </div>

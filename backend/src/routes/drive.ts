@@ -228,18 +228,7 @@ export function driveRouter(opts: DriveRouterOpts) {
     // Requires a valid OAuth access token on the server (GOOGLE_DRIVE_UPLOAD_TOKEN).
     try {
       const uid = req.user!.uid;
-      const folderIdDefault = await getUserFolderId(uid);
-      let folderId = folderIdDefault;
-      const overrideFolder = String(req.body?.folder ?? req.body?.folderLink ?? req.body?.targetFolder ?? '').trim();
-      if (overrideFolder) {
-        const parsed = parseFolderId(overrideFolder);
-        if (!parsed) return res.status(400).json({ error: { code: 'DRIVE_FOLDER_INVALID', message: 'Link/ID de pasta destino inválido.' } });
-        folderId = parsed;
-        // opcional: persistir como novo padrão
-        if (Boolean(req.body?.persistFolder)) {
-          await settingsCol.doc(uid).set({ driveFolderId: folderId, updatedAt: new Date().toISOString() }, { merge: true });
-        }
-      }
+      const folderId = await getUserFolderId(uid);
       if (!folderId) {
         return res.status(400).json({ error: { code: 'DRIVE_FOLDER_NOT_SET', message: 'Pasta do Drive não configurada. Salve um link/ID de pasta primeiro.' } });
       }
@@ -312,74 +301,6 @@ export function driveRouter(opts: DriveRouterOpts) {
       return res.json({ ok: true, file: data });
     } catch (e: any) {
       return res.status(500).json({ error: { code: 'DRIVE_UPLOAD_EXCEPTION', message: e?.message ?? 'Erro no upload' } });
-    }
-  });
-
-
-  // Mover arquivo para outra pasta (requer OAuth token)
-  r.post('/move', auth, opts.csrfProtection, async (req: AuthedRequest, res) => {
-    try {
-      const uid = req.user!.uid;
-      const fileId = String(req.body?.fileId ?? '').trim();
-      const destRaw = String(req.body?.destFolder ?? req.body?.folder ?? req.body?.folderLink ?? '').trim();
-      if (!fileId) return res.status(400).json({ error: { code: 'DRIVE_MOVE_NO_FILE', message: 'fileId é obrigatório' } });
-      const destId = parseFolderId(destRaw);
-      if (!destId) return res.status(400).json({ error: { code: 'DRIVE_MOVE_NO_DEST', message: 'Pasta destino inválida' } });
-
-      const uploadToken = process.env.GOOGLE_DRIVE_UPLOAD_TOKEN;
-      if (!uploadToken) {
-        return res.status(501).json({
-          error: {
-            code: 'DRIVE_MOVE_NOT_CONFIGURED',
-            message: 'Mover arquivos não está habilitado no servidor.',
-            hint: 'Defina GOOGLE_DRIVE_UPLOAD_TOKEN (OAuth access token com escopo drive) ou mova manualmente no Drive.'
-          }
-        });
-      }
-
-      // Get current parents
-      const metaUrl = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`);
-      metaUrl.searchParams.set('fields', 'id,parents,name');
-      const metaResp = await fetch(metaUrl.toString(), { headers: { Authorization: `Bearer ${uploadToken}` } });
-      if (!metaResp.ok) {
-        const text = await metaResp.text().catch(() => '');
-        return res.status(metaResp.status).json({ error: { code: 'DRIVE_MOVE_META_FAIL', message: `Falha ao obter metadados do arquivo. ${text}` } });
-      }
-      const meta = await metaResp.json() as any;
-      const parents: string[] = Array.isArray(meta?.parents) ? meta.parents : [];
-
-      const url = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`);
-      url.searchParams.set('addParents', destId);
-      if (parents.length) url.searchParams.set('removeParents', parents.join(','));
-      url.searchParams.set('fields', 'id,name,parents');
-
-      const resp = await fetch(url.toString(), {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${uploadToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => '');
-        return res.status(resp.status).json({ error: { code: 'DRIVE_MOVE_FAIL', message: `Falha ao mover arquivo. ${text}` } });
-      }
-
-      const moved = await resp.json().catch(() => ({}));
-      await auditFirestore(opts.fbDb, opts.logger, {
-        action: 'drive_file_move',
-        uid,
-        email: req.user?.email,
-        ip: getIp(req),
-        userAgent: (req as any).headers['user-agent'],
-        details: { fileId, destId, name: meta?.name ?? null },
-      });
-
-      return res.json({ ok: true, moved });
-    } catch (e: any) {
-      return res.status(500).json({ error: { code: 'DRIVE_MOVE_ERROR', message: e?.message ?? 'Erro ao mover arquivo' } });
     }
   });
 
