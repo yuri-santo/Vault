@@ -41,6 +41,9 @@ type ProjectDoc = {
   ownerUid: string;
   ownerEmail?: string | null;
   sharedWith?: string[];
+  // Allows sharing by email even if user isn't resolvable to a Firebase UID yet.
+  // Stored as lowercase emails.
+  sharedEmails?: string[];
   projectType?: 'sap' | 'general';
   name: string;
   description?: string | null;
@@ -54,11 +57,16 @@ type ProjectDoc = {
   hourlyRate?: number | null;
 };
 
-function canAccessProject(doc: any, uid: string) {
+function canAccessProject(doc: any, uid: string, emailLower?: string | null) {
   if (!doc) return false;
   if (doc.ownerUid === uid) return true;
   const shared = Array.isArray(doc.sharedWith) ? doc.sharedWith : [];
-  return shared.includes(uid);
+  if (shared.includes(uid)) return true;
+  if (emailLower) {
+    const sharedEmails = Array.isArray(doc.sharedEmails) ? doc.sharedEmails : [];
+    return sharedEmails.includes(emailLower);
+  }
+  return false;
 }
 
 function isOwner(doc: any, uid: string) {
@@ -137,9 +145,14 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
   // List projects
   r.get('/', auth, async (req: AuthedRequest, res) => {
     const uid = req.user!.uid;
-    const [ownedSnap, sharedSnap] = await Promise.all([
+    const emailLower = (req.user?.email ?? '').toLowerCase() || null;
+
+    const [ownedSnap, sharedSnap, sharedEmailSnap] = await Promise.all([
       col.where('ownerUid', '==', uid).get(),
       col.where('sharedWith', 'array-contains', uid).get().catch(() => ({ docs: [] } as any)),
+      emailLower
+        ? col.where('sharedEmails', 'array-contains', emailLower).get().catch(() => ({ docs: [] } as any))
+        : Promise.resolve({ docs: [] } as any),
     ]);
 
     const byId = new Map<string, any>();
@@ -147,14 +160,18 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     for (const d of (sharedSnap as any).docs ?? []) {
       if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...(d.data() as any) });
     }
+    for (const d of (sharedEmailSnap as any).docs ?? []) {
+      if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...(d.data() as any) });
+    }
 
     const projects = Array.from(byId.values())
       .map((p: any) => {
         const isOwner = String(p.ownerUid) === uid;
+        const canEditByEmail = emailLower ? (Array.isArray(p.sharedEmails) && p.sharedEmails.includes(emailLower)) : false;
         return {
           ...p,
           isOwner,
-          canEdit: isOwner || (Array.isArray(p.sharedWith) && p.sharedWith.includes(uid)),
+          canEdit: isOwner || (Array.isArray(p.sharedWith) && p.sharedWith.includes(uid)) || canEditByEmail,
         };
       })
       .sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -175,6 +192,7 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       ownerUid: uid,
       ownerEmail: req.user?.email ?? null,
       sharedWith: [],
+      sharedEmails: [],
       projectType,
       name,
       description: description || null,
@@ -255,7 +273,19 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     const resolved = await resolveEmailsToUids(opts.fbAuth, emails);
     const merged = Array.from(new Set([...uids, ...resolved.uids].filter((x) => x && x !== uid))).slice(0, 50);
 
-    await ref.set({ sharedWith: merged, updatedAt: new Date().toISOString() }, { merge: true });
+    // Persist emails as a fallback (so invited users can see the project even if UID resolution fails)
+    const ownerEmailLower = String(data?.ownerEmail ?? '').toLowerCase();
+    const incomingEmailsLower = Array.from(
+      new Set(
+        emails
+          .map((e: any) => String(e ?? '').trim().toLowerCase())
+          .filter((e: string) => e && e.includes('@') && e !== ownerEmailLower)
+      )
+    ).slice(0, 50);
+    const existingEmailsLower = Array.isArray(data?.sharedEmails) ? data.sharedEmails : [];
+    const mergedEmails = Array.from(new Set([...existingEmailsLower, ...incomingEmailsLower])).slice(0, 50);
+
+    await ref.set({ sharedWith: merged, sharedEmails: mergedEmails, updatedAt: new Date().toISOString() }, { merge: true });
 
     await auditFirestore(opts.fbDb, opts.logger, {
       action: 'project_share_update',
@@ -266,7 +296,7 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       details: { id, sharedWith: merged.length, unresolvedEmails: resolved.unresolved },
     });
 
-    return res.json({ ok: true, sharedWith: merged, unresolvedEmails: resolved.unresolved });
+    return res.json({ ok: true, sharedWith: merged, sharedEmails: mergedEmails, unresolvedEmails: resolved.unresolved });
   });
 
   // Delete project

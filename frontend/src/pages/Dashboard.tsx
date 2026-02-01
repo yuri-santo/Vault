@@ -672,6 +672,9 @@ export default function Dashboard({
   const [boardZoom, setBoardZoom] = useState(1);
 
   const [boardFullscreen, setBoardFullscreen] = useState(false);
+  const [projectSummaryModal, setProjectSummaryModal] = useState<
+    'approved' | 'finalized' | null
+  >(null);
 
   function clampNum(v: number, min: number, max: number) {
     return Math.min(max, Math.max(min, v));
@@ -1992,7 +1995,8 @@ export default function Dashboard({
                           </button>
                           {drivePath.map((p, idx) => (
                             <span key={p.id} className="flex items-center gap-2">
-                              <span className="opacity-50">/</span>
+                                {/* Avoid JSX parser ambiguity with raw '/' in some bundlers */}
+                                <span className="opacity-50">{'/'}</span>
                               <button type="button" className="hover:text-violet-700" onClick={() => goDriveBreadcrumb(idx)}>
                                 {p.name}
                               </button>
@@ -2248,6 +2252,21 @@ export default function Dashboard({
                             </Button>
                             <Button variant="secondary" onClick={() => setBoardZoom(1)} title="Reset">
                               Reset
+                            </Button>
+
+                            <Button
+                              variant="secondary"
+                              onClick={() => setProjectSummaryModal('approved')}
+                              title="Ver demandas aprovadas"
+                            >
+                              Aprovadas
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              onClick={() => setProjectSummaryModal('finalized')}
+                              title="Ver demandas finalizadas"
+                            >
+                              Finalizadas
                             </Button>
                           
                             <Button
@@ -3284,15 +3303,22 @@ export default function Dashboard({
                   .map((x) => x.trim())
                   .filter(Boolean);
                 const uids = projectShareSelectedUids;
-                await shareProject(projectShareTarget.id, { emails, uids });
+                const resp = await shareProject(projectShareTarget.id, { emails, uids });
+                const unresolved = (resp as any)?.unresolvedEmails;
+                if (Array.isArray(unresolved) && unresolved.length) {
+                  push(
+                    `Alguns e-mails não foram encontrados no sistema (serão mantidos como convite por e-mail): ${unresolved.join(', ')}`,
+                    'info'
+                  );
+                }
                 push('Projeto compartilhado ✅', 'success');
                 setProjectShareModalOpen(false);
                 setProjectShareTarget(null);
                 await refreshAll();
               } catch (err: any) {
-                const invalid = err?.response?.data?.invalidEmails;
-                if (Array.isArray(invalid) && invalid.length) {
-                  push(`E-mails inválidos/não encontrados: ${invalid.join(', ')}`, 'error');
+                const unresolved = err?.response?.data?.unresolvedEmails || err?.response?.data?.invalidEmails;
+                if (Array.isArray(unresolved) && unresolved.length) {
+                  push(`E-mails não encontrados: ${unresolved.join(', ')}`, 'error');
                 } else {
                   const msg = err?.response?.data?.error || 'Falha ao compartilhar projeto';
                   push(msg, 'error');
@@ -3303,6 +3329,82 @@ export default function Dashboard({
             Salvar compartilhamento
           </Button>
         </div>
+      </Modal>
+
+      {/* Modal resumo: aprovadas / finalizadas */}
+      <Modal
+        open={projectSummaryModal !== null}
+        onClose={() => setProjectSummaryModal(null)}
+        title={projectSummaryModal === 'approved' ? 'Demandas aprovadas' : 'Demandas finalizadas'}
+      >
+        {!projectBoard ? (
+          <div className="text-sm text-zinc-600">Nenhum projeto selecionado.</div>
+        ) : (() => {
+          const approvedIds = projectBoard.columns
+            .filter((c: any) => String(c.id).toLowerCase().includes('approved'))
+            .map((c: any) => c.id);
+          const finalizedIds = projectBoard.columns
+            .filter((c: any) => {
+              const id = String(c.id).toLowerCase();
+              return id.includes('done') || id.includes('prod') || id.includes('final');
+            })
+            .map((c: any) => c.id);
+          const ids = projectSummaryModal === 'approved' ? approvedIds : finalizedIds;
+          const cards = (projectBoard.cards || []).filter((c: any) => ids.includes(c.columnId));
+          const totalHrs = cards.reduce((acc: number, c: any) => acc + (Number(c.estimateHours) || 0), 0);
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-zinc-700">
+                  <span className="font-semibold">{cards.length}</span> demandas • <span className="font-semibold">{totalHrs}</span>h estimadas
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const text = cards
+                      .map((c: any) => `- ${c.title} (${Number(c.estimateHours) || 0}h)${c.dueDate ? ` • due ${c.dueDate}` : ''}`)
+                      .join('\n');
+                    navigator.clipboard.writeText(text);
+                    push('Lista copiada ✅', 'success');
+                  }}
+                >
+                  Copiar lista
+                </Button>
+              </div>
+
+              <div className="max-h-[60vh] overflow-auto space-y-2 pr-1">
+                {cards.length === 0 ? (
+                  <div className="text-sm text-zinc-600">Nenhuma demanda.</div>
+                ) : (
+                  cards.map((c: any) => (
+                    <div key={c.id} className="rounded-2xl border bg-white p-3 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-zinc-900 truncate">{c.title}</div>
+                          <div className="mt-1 text-xs text-zinc-600 flex flex-wrap gap-2">
+                            {c.priority ? <span className="rounded-full border px-2 py-0.5">Prioridade: {c.priority}</span> : null}
+                            {c.dueDate ? <span className="rounded-full border px-2 py-0.5">Due: {c.dueDate}</span> : null}
+                            <span className="rounded-full border px-2 py-0.5">{Number(c.estimateHours) || 0}h</span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setActiveCard(c);
+                            setCardEdit({ ...c });
+                            setCardModalOpen(true);
+                          }}
+                        >
+                          Abrir
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* Modal detalhes da demanda (Kanban) */}
