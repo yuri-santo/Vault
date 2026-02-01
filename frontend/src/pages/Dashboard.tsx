@@ -1603,7 +1603,7 @@ export default function Dashboard({
                 creatingProject={creatingProject}
                 removeProject={removeProject}
                 setProjectShareTarget={setProjectShareTarget}
-                setProjectShareOpen={setProjectShareOpen}
+                setProjectShareOpen={setProjectShareModalOpen}
                 projectBoard={projectBoard}
                 projectBoardLoading={projectBoardLoading}
                 newColumnTitle={newColumnTitle}
