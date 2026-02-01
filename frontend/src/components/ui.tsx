@@ -4,17 +4,56 @@ export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
-export function Button(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' }) {
-  const { className, variant = 'primary', ...rest } = props;
+export function Button(
+  props: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+    loading?: boolean;
+  }
+) {
+  const { variant = 'primary', className = '', loading = false, disabled, children, ...rest } = props;
+
   const base =
-    'inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:opacity-60 disabled:cursor-not-allowed';
-  const variants = {
-    primary: 'bg-violet-600 text-white hover:bg-violet-500',
-    secondary: 'bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50',
-    danger: 'bg-rose-600 text-white hover:bg-rose-500'
-  } as const;
-  return <button className={cn(base, variants[variant], className)} {...rest} />;
+    'inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed';
+  const variants: Record<string, string> = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    secondary: 'bg-zinc-200 text-zinc-900 hover:bg-zinc-300 focus:ring-zinc-400',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    ghost: 'bg-transparent text-zinc-900 hover:bg-zinc-100 focus:ring-zinc-400',
+  };
+
+  return (
+    <button
+      className={cn(base, variants[variant], className)}
+      disabled={disabled || loading}
+      {...rest}
+    >
+      {loading ? (
+        <svg
+          className="h-4 w-4 animate-spin"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+            fill="none"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          />
+        </svg>
+      ) : null}
+      <span>{children}</span>
+    </button>
+  );
 }
+
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const { className, ...rest } = props;

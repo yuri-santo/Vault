@@ -405,6 +405,12 @@ export default function Dashboard({
   const { push } = useToast();
 
   const [section, setSection] = useState<Section>('vault');
+  const [navLoading, setNavLoading] = useState(false);
+  const goSection = (s: Section) => {
+    setNavLoading(true);
+    setSection(s);
+    window.setTimeout(() => setNavLoading(false), 250);
+  };
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -547,6 +553,7 @@ export default function Dashboard({
   // Project sharing (owner-only)
   const [projectShareModalOpen, setProjectShareModalOpen] = useState(false);
   const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
+  const [sharingProject, setSharingProject] = useState(false);
   const [projectShareEmails, setProjectShareEmails] = useState('');
   const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<string[]>([]);
   const [newCardTitle, setNewCardTitle] = useState('');
@@ -1261,7 +1268,7 @@ export default function Dashboard({
   }) => (
     <button
       type="button"
-      onClick={() => { setSection(id); setMobileMenuOpen(false); }}
+      onClick={() => { goSection(id); setMobileMenuOpen(false); }}
       className={cn(
         'w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm transition',
       section === id
@@ -1361,6 +1368,20 @@ export default function Dashboard({
 
         {/* Main */}
         <main className="flex-1 min-w-0">
+          {navLoading ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+              <div className="rounded-2xl bg-white/90 px-4 py-3 shadow-lg">
+                <div className="flex items-center gap-2 text-sm text-zinc-900">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  <span>Carregando…</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {/* Topbar */}
           <div className="sticky top-0 z-30">
             <div className="w-full px-6 sm:px-8 lg:px-10 2xl:px-14 pt-5">
@@ -1438,7 +1459,7 @@ export default function Dashboard({
             <div className="md:hidden mt-4 grid grid-cols-5 gap-2">
               <button
                 type="button"
-                onClick={() => setSection('vault')}
+                onClick={() => goSection('vault')}
                 className={cn(
                   'rounded-2xl border border-zinc-200/70 bg-white/70 py-2 text-xs font-medium',
                   section === 'vault' && 'bg-violet-600 text-white border-violet-500'
@@ -1448,7 +1469,7 @@ export default function Dashboard({
               </button>
               <button
                 type="button"
-                onClick={() => setSection('sharing')}
+                onClick={() => goSection('sharing')}
                 className={cn(
                   'rounded-2xl border border-zinc-200/70 bg-white/70 py-2 text-xs font-medium',
                   section === 'sharing' && 'bg-violet-600 text-white border-violet-500'
@@ -1458,7 +1479,7 @@ export default function Dashboard({
               </button>
               <button
                 type="button"
-                onClick={() => setSection('drive')}
+                onClick={() => goSection('drive')}
                 className={cn(
                   'rounded-2xl border border-zinc-200/70 bg-white/70 py-2 text-xs font-medium',
                   section === 'drive' && 'bg-violet-600 text-white border-violet-500'
@@ -1468,7 +1489,7 @@ export default function Dashboard({
               </button>
               <button
                 type="button"
-                onClick={() => setSection('projects')}
+                onClick={() => goSection('projects')}
                 className={cn(
                   'rounded-2xl border border-zinc-200/70 bg-white/70 py-2 text-xs font-medium',
                   section === 'projects' && 'bg-violet-600 text-white border-violet-500'
@@ -1478,7 +1499,7 @@ export default function Dashboard({
               </button>
               <button
                 type="button"
-                onClick={() => setSection('notes')}
+                onClick={() => goSection('notes')}
                 className={cn(
                   'rounded-2xl border border-zinc-200/70 bg-white/70 py-2 text-xs font-medium',
                   section === 'notes' && 'bg-violet-600 text-white border-violet-500'
@@ -1924,6 +1945,7 @@ export default function Dashboard({
             Cancelar
           </Button>
           <Button
+            loading={sharingProject}
             onClick={async () => {
               if (!shareEntry) return;
               try {
@@ -2019,13 +2041,14 @@ export default function Dashboard({
           <Button
             onClick={async () => {
               if (!projectShareTarget) return;
+              setSharingProject(true);
               try {
                 const emails = projectShareEmails
                   .split(/[\s,;\n\r\t]+/g)
                   .map((x) => x.trim())
                   .filter(Boolean);
                 const uids = projectShareSelectedUids;
-                const resp = await shareProject(projectShareTarget.id, { emails, uids });
+                const resp = await shareProject(projectShareTarget.id, uids, emails);
                 const unresolved = (resp as any)?.unresolvedEmails;
                 if (Array.isArray(unresolved) && unresolved.length) {
                   push(
@@ -2045,6 +2068,8 @@ export default function Dashboard({
                   const msg = err?.response?.data?.error || 'Falha ao compartilhar projeto';
                   push(msg, 'error');
                 }
+              } finally {
+                setSharingProject(false);
               }
             }}
           >
