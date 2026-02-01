@@ -33,6 +33,7 @@ import {
   type DriveItem,
   type Project,
   type ProjectBoard,
+  type KanbanCard,
   type ShareConnection,
   type ShareInvite,
   type VaultEntry,
@@ -165,22 +166,6 @@ function EntryActions({
       push('Não foi possível copiar', 'error');
     }
   }
-
-  async function deleteNote(id: string) {
-    if (!confirm('Excluir esta nota?')) return;
-    try {
-      const res = await deleteNoteItem(id);
-      if (res.ok) {
-        setNoteItems((prev) => prev.filter((n) => n.id !== id));
-        push('Nota excluída', 'success');
-      } else {
-        push('Erro ao excluir nota', 'error');
-      }
-    } catch {
-      push('Erro ao excluir nota', 'error');
-    }
-  }
-
 
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
@@ -882,8 +867,10 @@ export default function Dashboard({
           ip: form.ip || null,
           email: form.email || null,
           connectionData: metaPayload ?? (form.connectionData || null),
-          sapConnection: sapPayload ?? (form.sapConnection || null),
-          vpnConnection: vpnPayload ?? (form.vpnConnection || null),
+          sapConnection: form.sapConnection || null,
+          sapJson: sapPayload,
+          vpnConnection: form.vpnConnection || null,
+          vpnJson: vpnPayload,
           notes: form.notes || null,
         });
         push('Senha atualizada ✅', 'success');
@@ -897,8 +884,10 @@ export default function Dashboard({
           ip: form.ip || null,
           email: form.email || null,
           connectionData: metaPayload ?? (form.connectionData || null),
-          sapConnection: sapPayload ?? (form.sapConnection || null),
-          vpnConnection: vpnPayload ?? (form.vpnConnection || null),
+          sapConnection: form.sapConnection || null,
+          sapJson: sapPayload,
+          vpnConnection: form.vpnConnection || null,
+          vpnJson: vpnPayload,
           notes: form.notes || null,
           ownerEmail: null,
           ownerUid: undefined,
@@ -1863,11 +1852,14 @@ export default function Dashboard({
                 const content = noteForm.content;
                 try {
                   if (editingNote) {
-                    const r = await updateNoteItem(editingNote.id, { title, content });
-                    setNoteItems((p) => p.map((x) => (x.id === editingNote.id ? r.item : x)));
+                    await updateNoteItem(editingNote.id, { title, content });
+                    const now = new Date().toISOString();
+                    setNoteItems((p) => p.map((x) => (x.id === editingNote.id ? { ...x, title, content, updatedAt: now } : x)));
                   } else {
-                    const r = await createNoteItem({ title, content });
-                    setNoteItems((p) => [r.item, ...p]);
+                    const r = await createNoteItem(title, content);
+                    const now = new Date().toISOString();
+                    const newItem: NoteItem = { id: r.id, title, content, createdAt: now, updatedAt: now };
+                    setNoteItems((p) => [newItem, ...p]);
                   }
                   setNoteModalOpen(false);
                 } catch {

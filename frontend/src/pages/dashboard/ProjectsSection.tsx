@@ -171,7 +171,6 @@ export default function ProjectsSection(props: Props) {
                 <div className="flex gap-2">
                   <Button
                     type="button"
-                    size="sm"
                     variant="secondary"
                     onClick={(e) => {
                       e.preventDefault();
@@ -184,8 +183,7 @@ export default function ProjectsSection(props: Props) {
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
-                    variant="destructive"
+                    variant="danger"
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -323,12 +321,11 @@ function KanbanColumnView({
                 {card.description && <div className="mt-1 text-xs text-white/60">{card.description}</div>}
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="secondary" onClick={() => onOpen(card)}>
+                <Button variant="secondary" onClick={() => onOpen(card)}>
                   Abrir
                 </Button>
                 <Button
-                  size="sm"
-                  variant="destructive"
+                  variant="danger"
                   onClick={() => onDelete(column.id, card.id)}
                 >
                   Excluir
