@@ -479,13 +479,6 @@ function EntryInlineActions({
       </IconActionButton>
 
       <IconActionButton
-        title="Ver detalhes"
-        onClick={onView}
-      >
-        <Icon name="info" className="h-4 w-4" />
-      </IconActionButton>
-
-      <IconActionButton
         title={entry.canEdit ? 'Compartilhar' : 'Somente leitura'}
         disabled={!entry.canEdit}
         onClick={onShare}
@@ -1460,7 +1453,7 @@ export default function Dashboard({
         <main className="flex-1 min-w-0">
           {/* Topbar */}
           <div className="sticky top-0 z-30">
-            <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-5">
+            <div className="w-full px-6 sm:px-8 lg:px-10 2xl:px-14 pt-5">
               <div className="rounded-3xl border border-zinc-200/70 bg-white/70 backdrop-blur shadow-sm px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <button
@@ -1508,7 +1501,7 @@ export default function Dashboard({
           </div>
 
           {/* Content */}
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6">
+          <div className="w-full px-6 sm:px-8 lg:px-10 2xl:px-14 py-6">
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <StatCard
@@ -1624,7 +1617,7 @@ export default function Dashboard({
                       </div>
                     </div>
                   </div>
-                  <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_184px] gap-3 px-5 py-3 border-b border-zinc-200/70 text-[11px] uppercase tracking-wide text-zinc-500">
+                  <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_260px] gap-3 px-5 py-3 border-b border-zinc-200/70 text-[11px] uppercase tracking-wide text-zinc-500">
                     <div>Serviço / Nome</div>
                     <div>Usuário</div>
                     <div>E-mail</div>
@@ -1637,7 +1630,7 @@ export default function Dashboard({
                     {loading ? (
                       <div className="p-5 space-y-4">
                         {[0, 1, 2, 3].map((i) => (
-                          <div key={i} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_184px] gap-3 items-center">
+                          <div key={i} className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_260px] gap-3 items-center">
                             <div>
                               <Skeleton className="h-4 w-40" />
                               <Skeleton className="h-3 w-24 mt-2" />
@@ -1724,7 +1717,7 @@ export default function Dashboard({
                             </div>
 
                             {/* Table row layout (desktop) */}
-                            <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_184px] gap-3 items-center">
+                            <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_260px] gap-3 items-center">
                               <div className="min-w-0">
                                 <div className="font-medium truncate">{e.name}</div>
                                 <div className="text-xs text-zinc-500 mt-1 truncate">
