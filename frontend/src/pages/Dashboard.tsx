@@ -43,6 +43,7 @@ import { useToast } from '../components/toast';
 import { Icon } from './dashboard/Icons';
 import DriveSection from './dashboard/DriveSection';
 import NotesSection from './dashboard/NotesSection';
+import ProjectsSection from './dashboard/ProjectsSection';
 
 
 function maskPassword(p: string) {
