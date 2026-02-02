@@ -32,7 +32,7 @@ import {
   type DriveFile,
   type DriveItem,
   type Project,
-  type ProjectBoard,
+  type ProjectBoard,\r\n  type KanbanColumn,
   type ShareConnection,
   type ShareInvite,
   type VaultEntry,
@@ -516,8 +516,10 @@ export default function Dashboard({
   // Projects / Kanban
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [projectBoard, setProjectBoard] = useState<ProjectBoard | null>(null);
-  const [projectBoardLoading, setProjectBoardLoading] = useState(false);
+  const [projectBoards, setProjectBoards] = useState<Record<string, ProjectBoard>>({});
+  const [projectBoardsLoading, setProjectBoardsLoading] = useState(false);
+  const [boardSaving, setBoardSaving] = useState(false);
+  const [activeCardProjectId, setActiveCardProjectId] = useState<string | null>(null);
   const [cardModalOpen, setCardModalOpen] = useState(false);
   const [activeCard, setActiveCard] = useState<KanbanCard | null>(null);
   const [cardEdit, setCardEdit] = useState({
@@ -542,20 +544,19 @@ export default function Dashboard({
   const [creatingProject, setCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
-  const [newProjectType, setNewProjectType] = useState<'sap' | 'general'>('sap');
-  const [newProjectHourlyRate, setNewProjectHourlyRate] = useState('');
 
   // Project sharing (owner-only)
   const [projectShareModalOpen, setProjectShareModalOpen] = useState(false);
   const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
   const [projectShareEmails, setProjectShareEmails] = useState('');
   const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<string[]>([]);
-  const [newCardTitle, setNewCardTitle] = useState('');
+  const [newCardTitle, setNewCardTitle] = useState('');  const [addingCardToColumn, setAddingCardToColumn] = useState<string | null>(null);
   const [newCardDesc, setNewCardDesc] = useState('');
+  const [newCardProjectId, setNewCardProjectId] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
   const [newCardColor, setNewCardColor] = useState<'yellow' | 'blue' | 'green' | 'pink' | 'white'>('yellow');
   const [newCardType, setNewCardType] = useState<'task' | 'note'>('task');
-  const [newColumnTitle, setNewColumnTitle] = useState('');
+  const [newColumnTitle, setNewColumnTitle] = useState('');  const [addingColumn, setAddingColumn] = useState(false);
 
   // Kanban (UI)
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
@@ -590,7 +591,31 @@ export default function Dashboard({
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
-
+  async function refreshProjectBoards(pListOverride?: Project[]) {
+    const list = (pListOverride ?? projects) || [];
+    const editable = list.filter((p) => p.canEdit);
+    if (editable.length === 0) {
+      setProjectBoards({});
+      return;
+    }
+    setProjectBoardsLoading(true);
+    try {
+      const results = await Promise.all(
+        editable.map((p) =>
+          getProjectBoard(p.id)
+            .then((res) => ({ id: p.id, board: res.board }))
+            .catch(() => null)
+        )
+      );
+      const next: Record<string, ProjectBoard> = {};
+      for (const r of results) {
+        if (r && r.id && r.board) next[r.id] = r.board;
+      }
+      setProjectBoards(next);
+    } finally {
+      setProjectBoardsLoading(false);
+    }
+  }
   async function refreshAll() {
     setLoading(true);
     try {
@@ -625,6 +650,8 @@ export default function Dashboard({
       const pList = (projs as any).projects ?? [];
       setProjects(pList);
       if (!activeProjectId && pList.length > 0) setActiveProjectId(pList[0].id);
+      if (!newCardProjectId && pList.length > 0) setNewCardProjectId(pList[0].id);
+      await refreshProjectBoards(pList);
     } finally {
       setLoading(false);
     }
@@ -633,53 +660,11 @@ export default function Dashboard({
   useEffect(() => {
     refreshAll().catch(() => push('Falha ao carregar dados', 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (!activeProjectId) {
-      setProjectBoard(null);
-      return;
-    }
-    setProjectBoardLoading(true);
-    getProjectBoard(activeProjectId)
-      .then(async (res) => {
-        // Auto-upgrade SAP boards to include missing columns requested (QA/Prod/Aprovadas)
-        let board = res.board;
-        const p = projects.find((x) => x.id === activeProjectId);
-        const type = (p?.projectType ?? 'sap') as any;
-
-        if (type === 'sap') {
-          const required = [
-            { id: 'backlog', title: 'Backlog' },
-            { id: 'analysis', title: 'Análise' },
-            { id: 'dev', title: 'Dev' },
-            { id: 'qa', title: 'QA' },
-            { id: 'ready_prod', title: 'Pronto p/ Produção' },
-            { id: 'in_prod', title: 'Em Produção' },
-            { id: 'done_prod', title: 'Finalizado em Produção' },
-            { id: 'approved', title: 'Demandas Aprovadas' },
-          ];
-          const existingIds = new Set(board.columns.map((c) => c.id));
-          const missing = required.filter((c) => !existingIds.has(c.id));
-          if (missing.length) {
-            // Map old prod column if present
-            const mappedCols = board.columns.map((c) => (c.id === 'prod' ? { ...c, id: 'in_prod', title: 'Em Produção' } : c));
-            const mappedCards = board.cards.map((card) => (card.columnId === 'prod' ? { ...card, columnId: 'in_prod' } : card));
-            board = { ...board, columns: [...mappedCols, ...missing], cards: mappedCards };
-            await saveProjectBoard(activeProjectId, board).catch(() => null);
-          }
-        }
-
-        setProjectBoard(board);
-        const firstCol = board.columns?.[0]?.id;
-        if (firstCol && !newCardColumnId) setNewCardColumnId(firstCol);
-      })
-      .catch(() => {
-        setProjectBoard(null);
-      })
-      .finally(() => setProjectBoardLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProjectId]);
+    refreshProjectBoards().catch(() => setProjectBoardsLoading(false));
+  }, [projects]);
 
   const filtered = useMemo(() => {
     const q = (query ?? '').trim().toLowerCase();
@@ -722,26 +707,61 @@ export default function Dashboard({
     () => (activeProjectId ? projects.find((p) => p.id === activeProjectId) || null : null),
     [projects, activeProjectId]
   );
+  const projectBoard = useMemo(() => {
+    const cols: Record<string, KanbanColumn> = {} as any;
+    const order: string[] = [];
+    const addCol = (c: KanbanColumn) => {
+      if (!c || !c.id) return;
+      if (!cols[c.id]) {
+        cols[c.id] = { id: c.id, title: c.title } as any;
+        order.push(c.id);
+  const activeProjectBoard = useMemo(
+    () => (activeCardProjectId ? projectBoards[activeCardProjectId] || null : null),
+    [activeCardProjectId, projectBoards]
+  );
+      }
+    };
 
+    DEFAULT_PROJECT_BOARD.columns.forEach(addCol);
+    Object.values(projectBoards).forEach((b) => b.columns.forEach(addCol));
+
+    const columns = order.map((id) => cols[id]).filter(Boolean) as any[];
+    const cards: any[] = [];
+    for (const p of projects) {
+      const b = projectBoards[p.id];
+      if (!b) continue;
+      for (const c of b.cards || []) {
+        cards.push({
+          ...c,
+          projectId: p.id,
+          projectName: p.name,
+          canEdit: p.canEdit,
+        });
+      }
+    }
+    return { columns, cards } as ProjectBoard;
+  }, [projectBoards, projects]);
   // Debounced save for Kanban (helps with drag/drop)
-  const kanbanSaveTimer = useRef<any>(null);
-  const lastBoardRef = useRef<ProjectBoard | null>(null);
+  const kanbanSaveTimers = useRef<Record<string, any>>({});
 
-  async function persistKanbanBoard(board: ProjectBoard) {
-    if (!activeProjectId) return;
+  async function persistKanbanBoard(projectId: string, board: ProjectBoard) {
+    if (!projectId) return;
+    setBoardSaving(true);
     try {
-      await saveProjectBoard(activeProjectId, board);
-      lastBoardRef.current = board;
+      await saveProjectBoard(projectId, board);
     } catch (err) {
-      push('Falha ao salvar quadro (verifique conexão/CSRF)', 'error');
+      push('Falha ao salvar quadro (verifique conexao/CSRF)', 'error');
+    } finally {
+      setBoardSaving(false);
     }
   }
 
-  function setBoardAndScheduleSave(next: ProjectBoard) {
-    setProjectBoard(next);
-    if (kanbanSaveTimer.current) clearTimeout(kanbanSaveTimer.current);
-    kanbanSaveTimer.current = setTimeout(() => {
-      persistKanbanBoard(next);
+  function setBoardAndScheduleSave(projectId: string, next: ProjectBoard) {
+    setProjectBoards((prev) => ({ ...prev, [projectId]: next }));
+    const timers = kanbanSaveTimers.current;
+    if (timers[projectId]) clearTimeout(timers[projectId]);
+    timers[projectId] = setTimeout(() => {
+      persistKanbanBoard(projectId, next);
     }, 800);
   }
 
@@ -984,8 +1004,6 @@ export default function Dashboard({
 
     setCreatingProject(true);
     try {
-      const rate = parseFloat(String(newProjectHourlyRate).replace(',', '.'));
-      const created = await createProject(name, String(newProjectDesc ?? '').trim() || null, newProjectType, isFinite(rate) ? rate : null);
       // Garante um kanban padrão com coluna "Concluído" no final.
       // Best-effort: se falhar, o projeto ainda existe.
       if (created?.id) {
@@ -994,7 +1012,6 @@ export default function Dashboard({
 
       setNewProjectName('');
       setNewProjectDesc('');
-      setNewProjectHourlyRate('');
       push('Projeto criado ✅', 'success');
 
       // Recarrega lista e seleciona o recém-criado
@@ -1002,7 +1019,7 @@ export default function Dashboard({
       const pList = (projs as any).projects ?? [];
       setProjects(pList);
       const newest = pList[0] || null;
-      if (newest) setActiveProjectId(newest.id);
+      if (newest) {        setActiveProjectId(newest.id);        setNewCardProjectId(newest.id);      }      await refreshProjectBoards(pList);
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Falha ao criar projeto';
       push(msg, 'error');
@@ -1018,16 +1035,14 @@ export default function Dashboard({
       push('Projeto excluído', 'success');
       const ps = projects.filter((p) => p.id !== id);
       setProjects(ps);
-      if (activeProjectId === id) {
-        setActiveProjectId(ps[0]?.id || null);
-      }
+      if (activeProjectId === id) {        setActiveProjectId(ps[0]?.id || null);      }      if (newCardProjectId === id) setNewCardProjectId(ps[0]?.id || '');      await refreshProjectBoards(ps);
     } catch {
       push('Falha ao excluir projeto', 'error');
     }
   }
 
-  async function saveBoard(next: ProjectBoard) {
-    setBoardAndScheduleSave(next);
+  async function saveBoard(projectId: string, next: ProjectBoard) {
+    setBoardAndScheduleSave(projectId, next);
   }
 
   function normalizeOrders(board: ProjectBoard): ProjectBoard {
@@ -1052,79 +1067,105 @@ export default function Dashboard({
     leftovers.forEach((c, idx) => nextCards.push({ ...c, order: (c.order ?? 0) + idx }));
     return { ...board, cards: nextCards };
   }
-
   async function addKanbanColumn() {
-    if (!projectBoard) return;
     const title = String(newColumnTitle ?? '').trim();
-    if (!title) return push('Informe o título da coluna', 'error');
+    if (!title) return push('Informe o titulo da coluna', 'error');
 
-    // Simple ID generation (works in browsers without crypto.randomUUID)
-    const id = `col_${Math.random().toString(36).slice(2, 10)}`;
-    const next: ProjectBoard = {
-      ...projectBoard,
-      columns: [...projectBoard.columns, { id, title }],
-    };
+    setAddingColumn(true);
+    try {
+      const id = `col_${Math.random().toString(36).slice(2, 10)}`;
+      const nextBoards: Record<string, ProjectBoard> = {};
+      for (const [pid, board] of Object.entries(projectBoards)) {
+        if (!board) continue;
+        if (board.columns.some((c) => c.id === id)) continue;
+        nextBoards[pid] = { ...board, columns: [...board.columns, { id, title }] };
+      }
 
-    setNewColumnTitle('');
-    await saveBoard(next);
-    push('Coluna criada ✅', 'success');
+      setNewColumnTitle('');
+      await Promise.all(Object.entries(nextBoards).map(([pid, board]) => saveBoard(pid, board)));
+      if (Object.keys(nextBoards).length) push('Coluna criada', 'success');
+    } finally {
+      setAddingColumn(false);
+    }
   }
 
-  async function addKanbanCard(columnId: string) {
-    if (!projectBoard) return;
+  async function addKanbanCard(columnId: string, projectId: string) {
+    const board = projectBoards[projectId];
+    if (!board) return;
     const title = String(newCardTitle ?? '').trim();
-    if (!title) return push('Informe o título do card', 'error');
-    const id = `c_${Math.random().toString(36).slice(2, 10)}`;
-    const now = new Date().toISOString();
-    const next: ProjectBoard = {
-      ...projectBoard,
-      cards: [
-        ...projectBoard.cards,
-        {
-          id,
-          columnId,
-          title,
-          description: String(newCardDesc ?? '').trim() || null,
-          type: (projects.find((x) => x.id === activeProjectId)?.projectType ?? 'sap') as any,
-          color: newCardColor,
-          order: (projectBoard.cards.filter((c) => c.columnId === columnId).length ?? 0) * 10,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ],
-    };
-    setNewCardTitle('');
-    setNewCardDesc('');
-    await saveBoard(next);
+    if (!title) return push('Informe o titulo do card', 'error');
+
+    setAddingCardToColumn(columnId);
+    try {
+      const id = `c_${Math.random().toString(36).slice(2, 10)}`;
+      const now = new Date().toISOString();
+      const projectType = (projects.find((x) => x.id === projectId)?.projectType ?? 'general') as any;
+      const next: ProjectBoard = {
+        ...board,
+        cards: [
+          ...board.cards,
+          {
+            id,
+            columnId,
+            title,
+            description: String(newCardDesc ?? '').trim() || null,
+            type: projectType,
+            color: newCardColor,
+            order: (board.cards.filter((c) => c.columnId === columnId).length ?? 0) * 10,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      };
+      setNewCardTitle('');
+      setNewCardDesc('');
+      await saveBoard(projectId, next);
+    } finally {
+      setAddingCardToColumn(null);
+    }
   }
 
-  async function moveKanbanCard(cardId: string, columnId: string) {
-    if (!projectBoard) return;
+  function resolveBoardByCard(cardId: string, projectId?: string | null) {
+    if (projectId && projectBoards[projectId]) return { projectId, board: projectBoards[projectId] };
+    for (const [pid, board] of Object.entries(projectBoards)) {
+      if (board.cards.some((c) => c.id === cardId)) return { projectId: pid, board };
+    }
+    return null;
+  }
+
+  async function moveKanbanCard(cardId: string, columnId: string, projectId?: string | null) {
+    const resolved = resolveBoardByCard(cardId, projectId);
+    if (!resolved) return;
+    const { board, projectId: pid } = resolved;
     const now = new Date().toISOString();
-    const count = projectBoard.cards.filter((c) => c.columnId === columnId).length;
+    const count = board.cards.filter((c) => c.columnId === columnId).length;
     const nextRaw: ProjectBoard = {
-      ...projectBoard,
-      cards: projectBoard.cards.map((c) =>
+      ...board,
+      cards: board.cards.map((c) =>
         c.id === cardId ? { ...c, columnId, order: count * 10, updatedAt: now } : c
       ),
     };
-    await saveBoard(normalizeOrders(nextRaw));
+    await saveBoard(pid, normalizeOrders(nextRaw));
   }
 
-  async function deleteKanbanCard(cardId: string) {
-    if (!projectBoard) return;
-    const next: ProjectBoard = { ...projectBoard, cards: projectBoard.cards.filter((c) => c.id !== cardId) };
-    await saveBoard(normalizeOrders(next));
+  async function deleteKanbanCard(cardId: string, projectId?: string | null) {
+    const resolved = resolveBoardByCard(cardId, projectId);
+    if (!resolved) return;
+    const { board, projectId: pid } = resolved;
+    const next: ProjectBoard = { ...board, cards: board.cards.filter((c) => c.id !== cardId) };
+    await saveBoard(pid, normalizeOrders(next));
   }
 
-  function dropCardToColumn(cardId: string, columnId: string, beforeCardId?: string) {
-    if (!projectBoard) return;
+  function dropCardToColumn(cardId: string, columnId: string, projectId?: string | null, beforeCardId?: string) {
+    const resolved = resolveBoardByCard(cardId, projectId);
+    if (!resolved) return;
+    const { board, projectId: pid } = resolved;
     const now = new Date().toISOString();
-    const moving = projectBoard.cards.find((c) => c.id === cardId);
+    const moving = board.cards.find((c) => c.id === cardId);
     if (!moving) return;
 
     const updatedMoving: KanbanCard = { ...moving, columnId, updatedAt: now };
-    const without = projectBoard.cards.filter((c) => c.id !== cardId);
+    const without = board.cards.filter((c) => c.id !== cardId);
 
     let nextCards = without;
     if (beforeCardId) {
@@ -1138,10 +1179,17 @@ export default function Dashboard({
       nextCards = [...without, updatedMoving];
     }
 
-    setBoardAndScheduleSave(normalizeOrders({ ...projectBoard, cards: nextCards }));
+    setBoardAndScheduleSave(pid, normalizeOrders({ ...board, cards: nextCards }));
   }
 
-  function openCard(card: KanbanCard) {
+  function openCard(cardId: string, projectId?: string | null) {
+    const resolved = resolveBoardByCard(cardId, projectId);
+    if (!resolved) return;
+    const { board, projectId: pid } = resolved;
+    const card = board.cards.find((c) => c.id === cardId);
+    if (!card) return;
+
+    setActiveCardProjectId(pid);
     setActiveCard(card);
     setCardEdit({
       title: card.title ?? '',
@@ -1165,9 +1213,10 @@ export default function Dashboard({
     setNewCardEmailBody('');
     setCardModalOpen(true);
   }
-
   async function persistCardEdits(extraPatch?: Partial<KanbanCard>) {
-    if (!projectBoard || !activeProjectId || !activeCard) return;
+    if (!activeCard || !activeCardProjectId) return;
+    const board = projectBoards[activeCardProjectId];
+    if (!board) return;
     const now = new Date().toISOString();
     const est = parseFloat(String(cardEdit.estimateHours).replace(',', '.'));
     const priority = (cardEdit as any).priority ?? 'med';
@@ -1209,29 +1258,29 @@ export default function Dashboard({
     };
 
     let columnId = cardEdit.columnId;
-    if (cardEdit.approved && projectBoard.columns.some((c) => c.id === 'approved')) {
+    if (cardEdit.approved && board.columns.some((c) => c.id === 'approved')) {
       columnId = 'approved';
     }
     nextCard.columnId = columnId;
     if (cardEdit.approved && !nextCard.approvedAt) nextCard.approvedAt = now;
 
     const next: ProjectBoard = {
-      ...projectBoard,
-      cards: projectBoard.cards.map((c) => (c.id === activeCard.id ? (nextCard as any) : c)),
+      ...board,
+      cards: board.cards.map((c) => (c.id === activeCard.id ? (nextCard as any) : c)),
     };
 
     setActiveCard(nextCard);
-    await saveBoard(next);
-    push('Card atualizado ✅', 'success');
+    await saveBoard(activeCardProjectId, next);
+    push('Card atualizado', 'success');
   }
-
   async function saveCardEdits() {
     await persistCardEdits();
     setCardModalOpen(false);
   }
-
   async function addCardComment() {
-    if (!projectBoard || !activeProjectId || !activeCard) return;
+    if (!activeCard || !activeCardProjectId) return;
+    const board = projectBoards[activeCardProjectId];
+    if (!board) return;
     const text = String(newCardComment ?? '').trim();
     if (!text) return;
     const now = new Date().toISOString();
@@ -1241,16 +1290,16 @@ export default function Dashboard({
       updatedAt: now,
     };
     const next: ProjectBoard = {
-      ...projectBoard,
-      cards: projectBoard.cards.map((c) => (c.id === activeCard.id ? nextCard : c)),
+      ...board,
+      cards: board.cards.map((c) => (c.id === activeCard.id ? nextCard : c)),
     };
     setActiveCard(nextCard);
     setNewCardComment('');
-    await saveBoard(next);
-  }
-
-  async function addCardEmail() {
-    if (!projectBoard || !activeProjectId || !activeCard) return;
+    await saveBoard(activeCardProjectId, next);
+  }  async function addCardEmail() {
+    if (!activeCard || !activeCardProjectId) return;
+    const board = projectBoards[activeCardProjectId];
+    if (!board) return;
     const subj = String(newCardEmailSubject ?? '').trim();
     const body = String(newCardEmailBody ?? '').trim();
     if (!subj && !body) return;
@@ -1261,16 +1310,14 @@ export default function Dashboard({
       updatedAt: now,
     };
     const next: ProjectBoard = {
-      ...projectBoard,
-      cards: projectBoard.cards.map((c) => (c.id === activeCard.id ? nextCard : c)),
+      ...board,
+      cards: board.cards.map((c) => (c.id === activeCard.id ? nextCard : c)),
     };
     setActiveCard(nextCard);
     setNewCardEmailSubject('');
     setNewCardEmailBody('');
-    await saveBoard(next);
-  }
-
-  async function saveQuickNotes() {
+    await saveBoard(activeCardProjectId, next);
+  }  async function saveQuickNotes() {
     try {
       const r = await saveNotes(notes);
       setNotesDirty(false);
@@ -1585,28 +1632,23 @@ export default function Dashboard({
                 setNewProjectName={setNewProjectName}
                 newProjectDesc={newProjectDesc}
                 setNewProjectDesc={setNewProjectDesc}
-                newProjectType={newProjectType}
-                setNewProjectType={setNewProjectType}
-                newProjectHourlyRate={newProjectHourlyRate}
-                setNewProjectHourlyRate={setNewProjectHourlyRate}
                 createNewProject={createNewProject}
-                creatingProject={creatingProject}
+                creatingProject={creatingProject}                deletingProjectId={deletingProjectId}
                 removeProject={removeProject}
                 setProjectShareTarget={setProjectShareTarget}
                 setProjectShareOpen={setProjectShareModalOpen}
-                projectBoard={projectBoard}
-                projectBoardLoading={projectBoardLoading}
+                projectBoard={projectBoard}                boardSaving={boardSaving}                projectBoardLoading={projectBoardsLoading}
                 newColumnTitle={newColumnTitle}
                 setNewColumnTitle={setNewColumnTitle}
-                addKanbanColumn={addKanbanColumn}
+                addKanbanColumn={addKanbanColumn}                addingColumn={addingColumn}
                 newCardTitle={newCardTitle}
                 setNewCardTitle={setNewCardTitle}
                 newCardDesc={newCardDesc}
                 setNewCardDesc={setNewCardDesc}
                 newCardColor={newCardColor}
-                setNewCardColor={setNewCardColor}
-                addKanbanCard={addKanbanCard}
-                deleteKanbanCard={deleteKanbanCard}
+                setNewCardColor={setNewCardColor}                newCardProjectId={newCardProjectId}                setNewCardProjectId={setNewCardProjectId}
+                addKanbanCard={addKanbanCard}                addingCardToColumn={addingCardToColumn}
+                deleteKanbanCard={deleteKanbanCard}                draggingCardId={draggingCardId}                setDraggingCardId={setDraggingCardId}                dropCardToColumn={dropCardToColumn}
                 moveKanbanCard={moveKanbanCard}
                 openCard={openCard}
               />
@@ -2161,7 +2203,7 @@ export default function Dashboard({
 
       {/* Modal detalhes da demanda (Kanban) */}
       <Modal open={cardModalOpen} onClose={() => setCardModalOpen(false)} title="Detalhes da demanda">
-        {!activeCard || !projectBoard ? (
+        {!activeCard || !activeProjectBoard ? (
           <div className="text-sm text-zinc-600">Selecione uma demanda.</div>
         ) : (
           <div className="space-y-4">
@@ -2276,7 +2318,7 @@ export default function Dashboard({
                   onChange={(e) => setCardEdit((p: any) => ({ ...p, columnId: e.target.value }))}
                   className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
                 >
-                  {projectBoard.columns.map((c) => (
+                  {activeProjectBoard.columns.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
                     </option>

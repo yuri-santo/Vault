@@ -17,6 +17,9 @@ type BoardCard = {
   columnId: string;
   color?: CardColor;
   order?: number;
+  projectId?: string;
+  projectName?: string;
+  canEdit?: boolean;
 };
 
 type ProjectBoard = {
@@ -30,14 +33,12 @@ type Props = {
   setActiveProjectId: (id: string | null) => void;
 
   // CRUD de projetos
-  newProjectTitle: string;
-  setNewProjectTitle: (v: string) => void;
+  newProjectName: string;
+  setNewProjectName: (v: string) => void;
   newProjectDesc: string;
   setNewProjectDesc: (v: string) => void;
-  newProjectType: 'general' | 'personal_finance';
-  setNewProjectType: (v: 'general' | 'personal_finance') => void;
   createNewProject: () => Promise<void>;
-  deleteProject: (id: string) => Promise<void>;
+  removeProject: (id: string) => Promise<void>;
   creatingProject: boolean;
   deletingProjectId: string | null;
 
@@ -60,16 +61,18 @@ type Props = {
   setNewCardDesc: (v: string) => void;
   newCardColor: CardColor;
   setNewCardColor: React.Dispatch<React.SetStateAction<CardColor>>;
-  addKanbanCard: (columnId: string) => Promise<void>;
+  newCardProjectId: string;
+  setNewCardProjectId: (v: string) => void;
+  addKanbanCard: (columnId: string, projectId: string) => Promise<void>;
   addingCardToColumn: string | null;
 
   draggingCardId: string | null;
   setDraggingCardId: (v: string | null) => void;
-  dropCardToColumn: (cardId: string, columnId: string) => Promise<void>;
-  deleteKanbanCard: (cardId: string) => Promise<void>;
+  dropCardToColumn: (cardId: string, columnId: string, projectId?: string | null) => Promise<void>;
+  deleteKanbanCard: (cardId: string, projectId?: string | null) => Promise<void>;
 
   // Modal de card (renderizado no Dashboard)
-  openCard: (cardId: string) => void;
+  openCard: (cardId: string, projectId?: string | null) => void;
 };
 
 function sortColumns(cols: BoardColumn[]): BoardColumn[] {
@@ -80,11 +83,11 @@ function sortColumns(cols: BoardColumn[]): BoardColumn[] {
     return ao - bo;
   });
 
-  // garante "Conclu√≠dos" por √∫ltimo
+  // garante "ConcluÌdos" por √∫ltimo
   const doneIdx = cloned.findIndex((c) => c.id === 'done');
   if (doneIdx >= 0) {
     const [done] = cloned.splice(doneIdx, 1);
-    cloned.push({ ...done, title: done.title || 'Conclu√≠dos' });
+    cloned.push({ ...done, title: done.title || 'ConcluÌdos' });
   }
   return cloned;
 }
@@ -112,14 +115,12 @@ export default function ProjectsSection(props: Props) {
     projects,
     activeProjectId,
     setActiveProjectId,
-    newProjectTitle,
-    setNewProjectTitle,
+    newProjectName,
+    setNewProjectName,
     newProjectDesc,
     setNewProjectDesc,
-    newProjectType,
-    setNewProjectType,
     createNewProject,
-    deleteProject,
+    removeProject,
     creatingProject,
     deletingProjectId,
     setProjectShareTarget,
@@ -137,6 +138,8 @@ export default function ProjectsSection(props: Props) {
     setNewCardDesc,
     newCardColor,
     setNewCardColor,
+    newCardProjectId,
+    setNewCardProjectId,
     addKanbanCard,
     addingCardToColumn,
     draggingCardId,
@@ -158,7 +161,7 @@ export default function ProjectsSection(props: Props) {
     const q = (projectSearch ?? '').trim().toLowerCase();
     if (!q) return projects;
     return projects.filter((p) => {
-      const t = (p.title || '').toLowerCase();
+      const t = (p.name || '').toLowerCase();
       const d = (p.description || '').toLowerCase();
       return t.includes(q) || d.includes(q);
     });
@@ -180,7 +183,9 @@ export default function ProjectsSection(props: Props) {
   }, [cards]);
 
   const onDragStart = (e: React.DragEvent, cardId: string) => {
-    e.dataTransfer.setData('text/plain', cardId);
+    const card = cards.find((c) => c.id === cardId);
+    const payload = JSON.stringify({ cardId, projectId: card?.projectId ?? null });
+    e.dataTransfer.setData('text/plain', payload);
     e.dataTransfer.effectAllowed = 'move';
     setDraggingCardId(cardId);
   };
@@ -192,10 +197,19 @@ export default function ProjectsSection(props: Props) {
 
   const onDrop = async (e: React.DragEvent, columnId: string) => {
     e.preventDefault();
-    const cardId = e.dataTransfer.getData('text/plain');
+    const raw = e.dataTransfer.getData('text/plain');
+    let cardId = '';
+    let projectId: string | null = null;
+    try {
+      const parsed = JSON.parse(raw);
+      cardId = parsed?.cardId ?? '';
+      projectId = parsed?.projectId ?? null;
+    } catch {
+      cardId = raw;
+    }
     setDraggingCardId(null);
     if (!cardId) return;
-    await dropCardToColumn(cardId, columnId);
+    await dropCardToColumn(cardId, columnId, projectId);
   };
 
   const isBusy = creatingProject || projectBoardLoading || boardSaving;
@@ -210,7 +224,7 @@ export default function ProjectsSection(props: Props) {
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-800 leading-tight">Projetos</h2>
-            <p className="text-xs text-slate-500">Quadro Kanban tradicional por projeto (inclui compartilhados).</p>
+            <p className="text-xs text-slate-500">Todos os cards de todos os projetos em um unico Kanban.</p>
           </div>
         </div>
 
@@ -233,7 +247,7 @@ export default function ProjectsSection(props: Props) {
           {activeProject && (
             <button
               type="button"
-              onClick={() => deleteProject(activeProject.id)}
+              onClick={() => removeProject(activeProject.id)}
               disabled={!!deletingProjectId}
               className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 disabled:opacity-60 active:scale-[0.98]"
               title="Excluir projeto"
@@ -276,11 +290,11 @@ export default function ProjectsSection(props: Props) {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-slate-800">Novo projeto</h3>
-                <span className="text-[11px] text-slate-500">{newProjectType === 'general' ? 'Kanban Geral' : 'Finan√ßas'}</span>
+                <span className="text-[11px] text-slate-500">Kanban</span>
               </div>
               <input
-                value={newProjectTitle}
-                onChange={(e) => setNewProjectTitle(e.target.value)}
+                value={newProjectName}
+                onChange={(e) => setnewProjectName(e.target.value)}
                 placeholder="Nome do projeto"
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Nome do projeto"
@@ -288,26 +302,16 @@ export default function ProjectsSection(props: Props) {
               <textarea
                 value={newProjectDesc}
                 onChange={(e) => setNewProjectDesc(e.target.value)}
-                placeholder="Descri√ß√£o (opcional)"
+                placeholder="DescriÁ„o (opcional)"
                 className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 rows={2}
-                aria-label="Descri√ß√£o do projeto"
+                aria-label="DescriÁ„o do projeto"
               />
 
-              <div className="flex items-center justify-between gap-2 mt-3">
-                <select
-                  value={newProjectType}
-                  onChange={(e) => setNewProjectType(e.target.value as any)}
-                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label="Tipo de projeto"
-                >
-                  <option value="general">Kanban Geral</option>
-                  <option value="personal_finance">Finan√ßas Pessoais</option>
-                </select>
-                <button
+              <div className="flex items-center justify-between gap-2 mt-3"><button
                   type="button"
                   onClick={createNewProject}
-                  disabled={!(newProjectTitle ?? '').trim() || creatingProject}
+                  disabled={!(newProjectName ?? '').trim() || creatingProject}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
                 >
                   {creatingProject ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -347,13 +351,13 @@ export default function ProjectsSection(props: Props) {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-slate-800 truncate">{p.title}</span>
+                              <span className="font-semibold text-sm text-slate-800 truncate">{p.name}</span>
                               {sharedBadge}
                             </div>
                             {p.description ? (
                               <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
                             ) : (
-                              <p className="text-xs text-slate-400 mt-1">Sem descri√ß√£o</p>
+                              <p className="text-xs text-slate-400 mt-1">Sem DescriÁ„o</p>
                             )}
                           </div>
                           {isActive && <CheckCircle2 size={18} className="text-blue-600 shrink-0" />}
@@ -372,14 +376,14 @@ export default function ProjectsSection(props: Props) {
           <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-slate-800 truncate">
-                {activeProject ? activeProject.title : 'Selecione um projeto'}
+                {activeProject ? `Selecionado para acoes: ${activeProject.name}` : 'Selecione um projeto na lista'}
               </h3>
               <p className="text-xs text-slate-500">
                 {activeProject
                   ? activeProject.canEdit
-                    ? 'Voc√™ pode editar este projeto.'
-                    : 'Voc√™ tem acesso de leitura (compartilhado).'
-                  : 'Escolha um projeto na lista ao lado.'}
+                    ? 'Voce pode editar este projeto.'
+                    : 'Voce tem acesso de leitura (compartilhado).'
+                  : 'A lista serve para compartilhar ou excluir projetos.'}
               </p>
             </div>
 
@@ -397,13 +401,13 @@ export default function ProjectsSection(props: Props) {
                   onChange={(e) => setNewColumnTitle(e.target.value)}
                   placeholder="Nova coluna"
                   className="w-44 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label="T√≠tulo da nova coluna"
-                  disabled={!activeProject || !activeProject.canEdit || isBusy}
+                  aria-label="Titulo da nova coluna"
+                  disabled={isBusy}
                 />
                 <button
                   type="button"
                   onClick={addKanbanColumn}
-                  disabled={!activeProject || !activeProject.canEdit || !(newColumnTitle ?? '').trim() || addingColumn}
+                  disabled={!(newColumnTitle ?? "").trim() || addingColumn}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60 active:scale-[0.98]"
                 >
                   {addingColumn ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -414,17 +418,13 @@ export default function ProjectsSection(props: Props) {
           </div>
 
           <div className="p-5">
-            {!activeProject ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-slate-600">
-                Selecione um projeto para visualizar o quadro.
-              </div>
-            ) : projectBoardLoading ? (
+            {projectBoardLoading ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-10 flex items-center justify-center gap-3 text-slate-600">
                 <Loader2 className="animate-spin" /> Carregando quadro...
               </div>
             ) : !projectBoard ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-6 text-slate-600">
-                N√£o foi poss√≠vel carregar o quadro.
+                Nao foi possivel carregar o quadro.
               </div>
             ) : (
               <div className="flex gap-4 overflow-x-auto pb-4">
@@ -436,7 +436,7 @@ export default function ProjectsSection(props: Props) {
                     onDrop={(e) => onDrop(e, col.id)}
                   >
                     <div className="p-4 border-b border-slate-200 bg-[#F4F5F7] rounded-t-2xl flex items-center justify-between sticky top-0">
-                      <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">{col.id === 'done' ? 'Conclu√≠dos' : col.title}</span>
+                      <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">{col.id === 'done' ? 'ConcluÌdos' : col.title}</span>
                       <span className="text-xs font-bold text-slate-600 bg-slate-200 px-2 py-1 rounded-full">
                         {(cardsByColumn[col.id] || []).length}
                       </span>
@@ -446,10 +446,10 @@ export default function ProjectsSection(props: Props) {
                       {(cardsByColumn[col.id] || []).map((card) => (
                         <div
                           key={card.id}
-                          draggable={activeProject.canEdit}
+                          draggable={card.canEdit !== false}
                           onDragStart={(e) => onDragStart(e, card.id)}
                           onDragEnd={() => setDraggingCardId(null)}
-                          onClick={() => openCard(card.id)}
+                          onClick={() => openCard(card.id, card.projectId)}
                           className={`group bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer select-none active:scale-[0.99] ${
                             draggingCardId === card.id ? 'opacity-60' : ''
                           }`}
@@ -461,18 +461,21 @@ export default function ProjectsSection(props: Props) {
                                 card.color || 'white'
                               }</span>
                             </div>
+                            {card.projectName ? (
+                              <div className="mt-1 text-[11px] text-slate-500 truncate">Projeto: {card.projectName}</div>
+                            ) : null}
                             <h4 className="mt-2 text-sm font-semibold text-slate-800 leading-snug line-clamp-2">{card.title}</h4>
                             {card.description ? (
                               <p className="mt-1 text-xs text-slate-500 line-clamp-3 whitespace-pre-wrap">{card.description}</p>
                             ) : null}
                           </div>
-                          {activeProject.canEdit && (
+                          {card.canEdit !== false && (
                             <div className="px-3 pb-3 flex justify-end">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  deleteKanbanCard(card.id);
+                                  deleteKanbanCard(card.id, card.projectId);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 text-xs font-semibold text-red-700 hover:text-red-800"
                                 title="Excluir card"
@@ -494,22 +497,37 @@ export default function ProjectsSection(props: Props) {
                     {/* Add card */}
                     <div className="p-3 border-t border-slate-200 bg-[#F4F5F7] rounded-b-2xl">
                       <div className="space-y-2">
+                        <select
+                          value={newCardProjectId}
+                          onChange={(e) => setNewCardProjectId(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          aria-label="Projeto do card"
+                          disabled={isBusy}
+                        >
+                          <option value="">Selecione o projeto do card</option>
+                          {projects.map((p) => (
+                            <option key={p.id} value={p.id} disabled={!p.canEdit}>
+                              {p.name}
+                              {!p.canEdit ? ' (somente leitura)' : ''}
+                            </option>
+                          ))}
+                        </select>
                         <input
                           value={newCardTitle}
                           onChange={(e) => setNewCardTitle(e.target.value)}
-                          placeholder="T√≠tulo do card"
+                          placeholder="Titulo do card"
                           className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          aria-label="T√≠tulo do card"
-                          disabled={!activeProject.canEdit || isBusy}
+                          aria-label="Titulo do card"
+                          disabled={isBusy}
                         />
                         <textarea
                           value={newCardDesc}
                           onChange={(e) => setNewCardDesc(e.target.value)}
-                          placeholder="Descri√ß√£o (opcional)"
+                          placeholder="DescriÁ„o (opcional)"
                           className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                           rows={2}
-                          aria-label="Descri√ß√£o do card"
-                          disabled={!activeProject.canEdit || isBusy}
+                          aria-label="DescriÁ„o do card"
+                          disabled={isBusy}
                         />
                         <div className="flex items-center justify-between gap-2">
                           <select
@@ -517,7 +535,7 @@ export default function ProjectsSection(props: Props) {
                             onChange={(e) => setNewCardColor(e.target.value as CardColor)}
                             className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             aria-label="Cor do card"
-                            disabled={!activeProject.canEdit || isBusy}
+                            disabled={isBusy}
                           >
                             <option value="white">Branco</option>
                             <option value="yellow">Amarelo</option>
@@ -527,8 +545,8 @@ export default function ProjectsSection(props: Props) {
                           </select>
                           <button
                             type="button"
-                            onClick={() => addKanbanCard(col.id)}
-                            disabled={!activeProject.canEdit || !(newCardTitle ?? '').trim() || addingCardToColumn === col.id}
+                            onClick={() => addKanbanCard(col.id, newCardProjectId)}
+                            disabled={!newCardProjectId || !(newCardTitle ?? "").trim() || addingCardToColumn === col.id}
                             className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
                           >
                             {addingCardToColumn === col.id ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
