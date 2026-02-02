@@ -137,7 +137,7 @@ export default function ProjectsSection(props: Props) {
               Tarefa
             </Button>
           </div>
-          <Button loading={creatingProject} disabled={!newProjectName.trim()} onClick={createNewProject}>
+          <Button disabled={creatingProject || !newProjectName.trim()} onClick={createNewProject}>
             {creatingProject ? 'Criando...' : 'Criar'}
           </Button>
           <Textarea
