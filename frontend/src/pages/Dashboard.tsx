@@ -49,6 +49,19 @@ import VaultSection from './dashboard/VaultSection';
 import SharingSection from './dashboard/SharingSection';
 import EntryEditModal from './dashboard/modals/EntryEditModal';
 
+// Kanban padrão (mais "tradicional") para novos projetos
+const DEFAULT_PROJECT_BOARD: ProjectBoard = {
+  columns: [
+    { id: 'backlog', title: 'Backlog', order: 1, limit: 20 },
+    { id: 'analysis', title: 'Análise', order: 2, limit: 10 },
+    { id: 'todo', title: 'A Fazer', order: 3, limit: 10 },
+    { id: 'doing', title: 'Fazendo', order: 4, limit: 6 },
+    { id: 'testing', title: 'QA / UAT', order: 5, limit: 10 },
+    { id: 'done', title: 'Concluídos', order: 6, limit: 50 },
+  ],
+  cards: [],
+};
+
 
 function maskPassword(p: string) {
   return '•'.repeat(Math.min(Math.max(p.length, 8), 14));
@@ -969,7 +982,12 @@ export default function Dashboard({
     setCreatingProject(true);
     try {
       const rate = parseFloat(String(newProjectHourlyRate).replace(',', '.'));
-      await createProject(name, newProjectDesc.trim() || null, newProjectType, isFinite(rate) ? rate : null);
+      const created = await createProject(name, newProjectDesc.trim() || null, newProjectType, isFinite(rate) ? rate : null);
+      // Garante um kanban padrão com coluna "Concluído" no final.
+      // Best-effort: se falhar, o projeto ainda existe.
+      if (created?.id) {
+        await saveProjectBoard(created.id, DEFAULT_PROJECT_BOARD).catch(() => void 0);
+      }
 
       setNewProjectName('');
       setNewProjectDesc('');

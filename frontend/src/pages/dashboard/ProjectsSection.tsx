@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Share2, Trash2, Loader2, CheckCircle2, KanbanSquare, Search, X } from 'lucide-react';
+import { Plus, Share2, Trash2, Loader2, CheckCircle2, KanbanSquare, Search, X } from '../../components/icons';
 import type { Project } from '../../lib/api';
 
 type CardColor = 'yellow' | 'blue' | 'green' | 'pink' | 'white';
