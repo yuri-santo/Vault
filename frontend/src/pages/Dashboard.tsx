@@ -175,15 +175,6 @@ function EntryActions({
     }
   }, [push]);
 
-  async function copyText(text: string) {
-    try {
-      await navigator.clipboard.writeText(text ?? '');
-      push('Copiado ✅', 'success');
-    } catch {
-      push('Não foi possível copiar', 'error');
-    }
-  }
-
   async function deleteNote(id: string) {
     if (!confirm('Excluir esta nota?')) return;
     try {
