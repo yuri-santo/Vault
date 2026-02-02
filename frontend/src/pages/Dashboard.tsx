@@ -550,13 +550,16 @@ export default function Dashboard({
   const [projectShareTarget, setProjectShareTarget] = useState<Project | null>(null);
   const [projectShareEmails, setProjectShareEmails] = useState('');
   const [projectShareSelectedUids, setProjectShareSelectedUids] = useState<string[]>([]);
-  const [newCardTitle, setNewCardTitle] = useState('');  const [addingCardToColumn, setAddingCardToColumn] = useState<string | null>(null);
+  const [projectShareAccess, setProjectShareAccess] = useState<'edit' | 'view'>('edit');
+  const [newCardTitle, setNewCardTitle] = useState('');
+  const [addingCardToColumn, setAddingCardToColumn] = useState<string | null>(null);
   const [newCardDesc, setNewCardDesc] = useState('');
   const [newCardProjectId, setNewCardProjectId] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
   const [newCardColor, setNewCardColor] = useState<'yellow' | 'blue' | 'green' | 'pink' | 'white'>('yellow');
   const [newCardType, setNewCardType] = useState<'task' | 'note'>('task');
-  const [newColumnTitle, setNewColumnTitle] = useState('');  const [addingColumn, setAddingColumn] = useState(false);
+  const [newColumnTitle, setNewColumnTitle] = useState('');
+  const [addingColumn, setAddingColumn] = useState(false);
 
   // Kanban (UI)
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
@@ -593,12 +596,11 @@ export default function Dashboard({
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   async function refreshProjectBoards(pListOverride?: Project[]) {
     const list = (pListOverride ?? projects) || [];
-    const editable = list.filter((p) => p.canEdit);
-    if (editable.length === 0) {      setProjectBoards({});      setProjectBoardsLoading(false);      return;    }
+    const viewable = list;    if (viewable.length === 0) {      setProjectBoards({});      setProjectBoardsLoading(false);      return;    }
     setProjectBoardsLoading(true);
     try {
       const results = await Promise.all(
-        editable.map((p) =>
+        viewable.map((p) =>
           getProjectBoard(p.id)
             .then((res) => ({ id: p.id, board: res.board }))
             .catch(() => null)
@@ -2044,8 +2046,7 @@ export default function Dashboard({
         open={projectShareModalOpen}
         title={projectShareTarget ? `Compartilhar projeto: ${projectShareTarget.name}` : 'Compartilhar projeto'}
         onClose={() => {
-          setProjectShareModalOpen(false);
-          setProjectShareTarget(null);
+          setProjectShareModalOpen(false);          setProjectShareTarget(null);          setProjectShareAccess('edit');
         }}
       >
         <div className="text-sm text-zinc-600">
@@ -2053,6 +2054,21 @@ export default function Dashboard({
         </div>
 
         <div className="mt-4 space-y-2">
+          <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
+            <div className="font-medium text-zinc-800">Permissao</div>
+            <div className="mt-1 text-xs text-zinc-500">
+              Escolha se os convidados podem editar ou apenas visualizar o projeto.
+            </div>
+            <select
+              value={projectShareAccess}
+              onChange={(e) => setProjectShareAccess(e.target.value as 'edit' | 'view')}
+              className="mt-3 w-full rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="edit">Pode editar</option>
+              <option value="view">Somente visualizar</option>
+            </select>
+          </div>
+
           <div className="rounded-2xl border border-zinc-200/70 bg-white px-4 py-3 text-sm text-zinc-600">
             <div className="font-medium text-zinc-800">Adicionar por e-mail (opcional)</div>
             <div className="mt-1 text-xs text-zinc-500">
@@ -2108,7 +2124,7 @@ export default function Dashboard({
                   .map((x) => x.trim())
                   .filter(Boolean);
                 const uids = projectShareSelectedUids;
-                const resp = await shareProject(projectShareTarget.id, { emails, uids });
+                const resp = await shareProject(projectShareTarget.id, { emails, uids, access: projectShareAccess });
                 const unresolved = (resp as any)?.unresolvedEmails;
                 if (Array.isArray(unresolved) && unresolved.length) {
                   push(
@@ -2117,8 +2133,7 @@ export default function Dashboard({
                   );
                 }
                 push('Projeto compartilhado ✅', 'success');
-                setProjectShareModalOpen(false);
-                setProjectShareTarget(null);
+                setProjectShareModalOpen(false);          setProjectShareTarget(null);          setProjectShareAccess('edit');
                 await refreshAll();
               } catch (err: any) {
                 const unresolved = err?.response?.data?.unresolvedEmails || err?.response?.data?.invalidEmails;

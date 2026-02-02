@@ -276,6 +276,7 @@ export type Project = {
   sharedWith?: string[];
   isOwner?: boolean;
   canEdit?: boolean;
+  canView?: boolean;
   projectType?: 'sap' | 'general';
   name: string;
   description?: string | null;
@@ -333,9 +334,19 @@ export async function updateProject(
   return data as { ok: boolean };
 }
 
-export async function shareProject(id: string, uids: string[], emails: string[]) {
-  const { data } = await api.put(`/projects/${id}/share`, { uids, emails });
-  return data as { ok: boolean; sharedWith: string[]; unresolvedEmails: string[] };
+export async function shareProject(
+  id: string,
+  payload: { uids: string[]; emails?: string[]; access?: 'edit' | 'view' }
+) {
+  const { data } = await api.put(`/projects/${id}/share`, payload);
+  return data as {
+    ok: boolean;
+    sharedWith: string[];
+    sharedWithView?: string[];
+    sharedEmails?: string[];
+    sharedViewEmails?: string[];
+    unresolvedEmails: string[];
+  };
 }
 
 export async function deleteProject(id: string) {

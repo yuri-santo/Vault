@@ -41,9 +41,11 @@ type ProjectDoc = {
   ownerUid: string;
   ownerEmail?: string | null;
   sharedWith?: string[];
+  sharedWithView?: string[];
   // Allows sharing by email even if user isn't resolvable to a Firebase UID yet.
   // Stored as lowercase emails.
   sharedEmails?: string[];
+  sharedViewEmails?: string[];
   projectType?: 'sap' | 'general';
   name: string;
   description?: string | null;
@@ -62,9 +64,13 @@ function canAccessProject(doc: any, uid: string, emailLower?: string | null) {
   if (doc.ownerUid === uid) return true;
   const shared = Array.isArray(doc.sharedWith) ? doc.sharedWith : [];
   if (shared.includes(uid)) return true;
+  const sharedView = Array.isArray(doc.sharedWithView) ? doc.sharedWithView : [];
+  if (sharedView.includes(uid)) return true;
   if (emailLower) {
     const sharedEmails = Array.isArray(doc.sharedEmails) ? doc.sharedEmails : [];
-    return sharedEmails.includes(emailLower);
+    if (sharedEmails.includes(emailLower)) return true;
+    const sharedViewEmails = Array.isArray(doc.sharedViewEmails) ? doc.sharedViewEmails : [];
+    return sharedViewEmails.includes(emailLower);
   }
   return false;
 }
@@ -147,11 +153,15 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     const uid = req.user!.uid;
     const emailLower = (req.user?.email ?? '').toLowerCase() || null;
 
-    const [ownedSnap, sharedSnap, sharedEmailSnap] = await Promise.all([
+    const [ownedSnap, sharedSnap, sharedEmailSnap, sharedViewSnap, sharedViewEmailSnap] = await Promise.all([
       col.where('ownerUid', '==', uid).get(),
       col.where('sharedWith', 'array-contains', uid).get().catch(() => ({ docs: [] } as any)),
       emailLower
         ? col.where('sharedEmails', 'array-contains', emailLower).get().catch(() => ({ docs: [] } as any))
+        : Promise.resolve({ docs: [] } as any),
+      col.where('sharedWithView', 'array-contains', uid).get().catch(() => ({ docs: [] } as any)),
+      emailLower
+        ? col.where('sharedViewEmails', 'array-contains', emailLower).get().catch(() => ({ docs: [] } as any))
         : Promise.resolve({ docs: [] } as any),
     ]);
 
@@ -163,17 +173,28 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
     for (const d of (sharedEmailSnap as any).docs ?? []) {
       if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...(d.data() as any) });
     }
+    for (const d of (sharedViewSnap as any).docs ?? []) {
+      if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...(d.data() as any) });
+    }
+    for (const d of (sharedViewEmailSnap as any).docs ?? []) {
+      if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...(d.data() as any) });
+    }
 
     const projects = Array.from(byId.values())
       .map((p: any) => {
         const isOwner = String(p.ownerUid) === uid;
         const canEditByEmail = emailLower ? (Array.isArray(p.sharedEmails) && p.sharedEmails.includes(emailLower)) : false;
+        const canViewByEmail = emailLower ? (Array.isArray(p.sharedViewEmails) && p.sharedViewEmails.includes(emailLower)) : false;
+        const canEditByUid = Array.isArray(p.sharedWith) && p.sharedWith.includes(uid);
+        const canViewByUid = Array.isArray(p.sharedWithView) && p.sharedWithView.includes(uid);
         return {
           ...p,
           isOwner,
-          canEdit: isOwner || (Array.isArray(p.sharedWith) && p.sharedWith.includes(uid)) || canEditByEmail,
+          canEdit: isOwner || canEditByUid || canEditByEmail,
+          canView: isOwner || canEditByUid || canEditByEmail || canViewByUid || canViewByEmail,
         };
       })
+      .filter((p: any) => p.canView)
       .sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 
     return res.json({ projects });
@@ -192,7 +213,9 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       ownerUid: uid,
       ownerEmail: req.user?.email ?? null,
       sharedWith: [],
+      sharedWithView: [],
       sharedEmails: [],
+      sharedViewEmails: [],
       projectType,
       name,
       description: description || null,
@@ -269,6 +292,7 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
 
     const uids = Array.isArray(req.body?.uids) ? req.body.uids.filter((x: any) => typeof x === 'string') : [];
     const emails = Array.isArray(req.body?.emails) ? req.body.emails.filter((x: any) => typeof x === 'string') : [];
+    const access = (String(req.body?.access ?? 'edit').toLowerCase() === 'view' ? 'view' : 'edit') as 'edit' | 'view';
 
     const resolved = await resolveEmailsToUids(opts.fbAuth, emails);
     const merged = Array.from(new Set([...uids, ...resolved.uids].filter((x) => x && x !== uid))).slice(0, 50);
@@ -283,9 +307,37 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       )
     ).slice(0, 50);
     const existingEmailsLower = Array.isArray(data?.sharedEmails) ? data.sharedEmails : [];
-    const mergedEmails = Array.from(new Set([...existingEmailsLower, ...incomingEmailsLower])).slice(0, 50);
+    const existingViewEmailsLower = Array.isArray(data?.sharedViewEmails) ? data.sharedViewEmails : [];
+    const existingUids = Array.isArray(data?.sharedWith) ? data.sharedWith : [];
+    const existingViewUids = Array.isArray(data?.sharedWithView) ? data.sharedWithView : [];
 
-    await ref.set({ sharedWith: merged, sharedEmails: mergedEmails, updatedAt: new Date().toISOString() }, { merge: true });
+    let nextSharedWith = existingUids;
+    let nextSharedWithView = existingViewUids;
+    let nextSharedEmails = existingEmailsLower;
+    let nextSharedViewEmails = existingViewEmailsLower;
+
+    if (access === 'view') {
+      nextSharedWith = existingUids.filter((x: string) => !merged.includes(x));
+      nextSharedEmails = existingEmailsLower.filter((x: string) => !incomingEmailsLower.includes(x));
+      nextSharedWithView = Array.from(new Set([...existingViewUids, ...merged])).slice(0, 50);
+      nextSharedViewEmails = Array.from(new Set([...existingViewEmailsLower, ...incomingEmailsLower])).slice(0, 50);
+    } else {
+      nextSharedWithView = existingViewUids.filter((x: string) => !merged.includes(x));
+      nextSharedViewEmails = existingViewEmailsLower.filter((x: string) => !incomingEmailsLower.includes(x));
+      nextSharedWith = Array.from(new Set([...existingUids, ...merged])).slice(0, 50);
+      nextSharedEmails = Array.from(new Set([...existingEmailsLower, ...incomingEmailsLower])).slice(0, 50);
+    }
+
+    await ref.set(
+      {
+        sharedWith: nextSharedWith,
+        sharedWithView: nextSharedWithView,
+        sharedEmails: nextSharedEmails,
+        sharedViewEmails: nextSharedViewEmails,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
 
     await auditFirestore(opts.fbDb, opts.logger, {
       action: 'project_share_update',
@@ -293,10 +345,17 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       email: req.user?.email,
       ip: getIp(req),
       userAgent: (req as any).headers['user-agent'],
-      details: { id, sharedWith: merged.length, unresolvedEmails: resolved.unresolved },
+      details: { id, access, sharedWith: merged.length, unresolvedEmails: resolved.unresolved },
     });
 
-    return res.json({ ok: true, sharedWith: merged, sharedEmails: mergedEmails, unresolvedEmails: resolved.unresolved });
+    return res.json({
+      ok: true,
+      sharedWith: nextSharedWith,
+      sharedWithView: nextSharedWithView,
+      sharedEmails: nextSharedEmails,
+      sharedViewEmails: nextSharedViewEmails,
+      unresolvedEmails: resolved.unresolved,
+    });
   });
 
   // Delete project
@@ -337,7 +396,11 @@ export function projectsRouter(opts: ProjectsRouterOpts) {
       isOwner ||
       (Array.isArray(data?.sharedWith) && data.sharedWith.includes(uid)) ||
       (emailLower && Array.isArray(data?.sharedEmails) && data.sharedEmails.includes(emailLower));
-    if (!canEdit) return res.status(403).json({ error: 'Forbidden' });
+    const canView =
+      canEdit ||
+      (Array.isArray(data?.sharedWithView) && data.sharedWithView.includes(uid)) ||
+      (emailLower && Array.isArray(data?.sharedViewEmails) && data.sharedViewEmails.includes(emailLower));
+    if (!canView) return res.status(403).json({ error: 'Forbidden' });
 
     const projectType = (data?.projectType === 'general' ? 'general' : 'sap') as 'sap' | 'general';
     const board = data?.board ?? defaultBoard(new Date().toISOString(), projectType);
