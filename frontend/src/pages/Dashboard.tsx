@@ -542,6 +542,7 @@ export default function Dashboard({
   const [newCardEmailBody, setNewCardEmailBody] = useState('');
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
 
