@@ -435,6 +435,7 @@ export default function ProjectsSection(props: Props) {
                 Nao foi possivel carregar o quadro.
               </div>
             ) : (
+              <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="text-sm font-bold text-slate-800">Novo card</div>
                 <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -586,6 +587,7 @@ export default function ProjectsSection(props: Props) {
 
                 {/* hint */}
                 <div className="w-20 shrink-0" />
+              </div>
               </div>
             )}
           </div>
