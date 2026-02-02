@@ -292,7 +292,7 @@ export default function ProjectsSection(props: Props) {
               </div>
               <input
                 value={newProjectName}
-                onChange={(e) => setnewProjectName(e.target.value)}
+                onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="Nome do projeto"
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Nome do projeto"

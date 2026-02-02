@@ -32,8 +32,7 @@ import {
   type DriveFile,
   type DriveItem,
   type Project,
-  type ProjectBoard,
-  type KanbanColumn,
+  type ProjectBoard,  type KanbanColumn,  type KanbanCard,
   type ShareConnection,
   type ShareInvite,
   type VaultEntry,
@@ -1002,7 +1001,8 @@ export default function Dashboard({
 
     setCreatingProject(true);
     try {
-      // Garante um kanban padrão com coluna "Concluído" no final.
+      const created = await createProject(name, String(newProjectDesc ?? '').trim() || null, 'general');
+      // Garante um kanban padrao com coluna "Concluido" no final.
       // Best-effort: se falhar, o projeto ainda existe.
       if (created?.id) {
         await saveProjectBoard(created.id, DEFAULT_PROJECT_BOARD).catch(() => void 0);
@@ -1010,14 +1010,18 @@ export default function Dashboard({
 
       setNewProjectName('');
       setNewProjectDesc('');
-      push('Projeto criado ✅', 'success');
+      push('Projeto criado', 'success');
 
-      // Recarrega lista e seleciona o recém-criado
+      // Recarrega lista e seleciona o recem-criado
       const projs = await listProjects().catch(() => ({ projects: [] } as any));
       const pList = (projs as any).projects ?? [];
       setProjects(pList);
       const newest = pList[0] || null;
-      if (newest) {        setActiveProjectId(newest.id);        setNewCardProjectId(newest.id);      }      await refreshProjectBoards(pList);
+      if (newest) {
+        setActiveProjectId(newest.id);
+        setNewCardProjectId(newest.id);
+      }
+      await refreshProjectBoards(pList);
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Falha ao criar projeto';
       push(msg, 'error');
@@ -1025,7 +1029,6 @@ export default function Dashboard({
       setCreatingProject(false);
     }
   }
-
   async function removeProject(id: string) {
     if (!confirm('Excluir projeto? Isso remove o quadro associado.')) return;
     try {
@@ -2192,8 +2195,7 @@ export default function Dashboard({
                         <Button
                           variant="secondary"
                           onClick={() => {
-                            setActiveCard(c);
-                            setCardEdit({ ...c });
+                            setActiveCardProjectId((c as any).projectId ?? null);                            setActiveCard(c);                            setCardEdit({ ...c });
                             setCardModalOpen(true);
                           }}
                         >
