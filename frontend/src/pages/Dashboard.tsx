@@ -542,6 +542,7 @@ export default function Dashboard({
   const [newCardColumnId, setNewCardColumnId] = useState('');
   const [newCardColor, setNewCardColor] = useState<'yellow' | 'blue' | 'green' | 'pink' | 'white'>('yellow');
   const [newCardType, setNewCardType] = useState<'task' | 'note'>('task');
+  const [newColumnTitle, setNewColumnTitle] = useState('');
 
   // Kanban (UI)
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
@@ -1029,6 +1030,23 @@ export default function Dashboard({
     const leftovers = board.cards.filter((c) => !known.has(c.columnId));
     leftovers.forEach((c, idx) => nextCards.push({ ...c, order: (c.order ?? 0) + idx }));
     return { ...board, cards: nextCards };
+  }
+
+  async function addKanbanColumn() {
+    if (!projectBoard) return;
+    const title = newColumnTitle.trim();
+    if (!title) return push('Informe o título da coluna', 'error');
+
+    // Simple ID generation (works in browsers without crypto.randomUUID)
+    const id = `col_${Math.random().toString(36).slice(2, 10)}`;
+    const next: ProjectBoard = {
+      ...projectBoard,
+      columns: [...projectBoard.columns, { id, title }],
+    };
+
+    setNewColumnTitle('');
+    await saveBoard(next);
+    push('Coluna criada ✅', 'success');
   }
 
   async function addKanbanCard(columnId: string) {
