@@ -181,10 +181,8 @@ export default function ProjectsSection(props: Props) {
     }
     return map;
   }, [cards]);
-
-  const onDragStart = (e: React.DragEvent, cardId: string) => {
-    const card = cards.find((c) => c.id === cardId);
-    const payload = JSON.stringify({ cardId, projectId: card?.projectId ?? null });
+  const onDragStart = (e: React.DragEvent, cardId: string, projectId?: string | null) => {
+    const payload = JSON.stringify({ cardId, projectId: projectId ?? null });
     e.dataTransfer.setData('text/plain', payload);
     e.dataTransfer.effectAllowed = 'move';
     setDraggingCardId(cardId);
@@ -445,9 +443,9 @@ export default function ProjectsSection(props: Props) {
                     <div className="p-3 space-y-3 min-h-[120px]">
                       {(cardsByColumn[col.id] || []).map((card) => (
                         <div
-                          key={card.id}
+                          key={`${card.projectId || 'p'}_${card.id}`}
                           draggable={card.canEdit !== false}
-                          onDragStart={(e) => onDragStart(e, card.id)}
+                          onDragStart={(e) => onDragStart(e, card.id, card.projectId)}
                           onDragEnd={() => setDraggingCardId(null)}
                           onClick={() => openCard(card.id, card.projectId)}
                           className={`group bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer select-none active:scale-[0.99] ${

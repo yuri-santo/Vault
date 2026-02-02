@@ -32,7 +32,8 @@ import {
   type DriveFile,
   type DriveItem,
   type Project,
-  type ProjectBoard,\r\n  type KanbanColumn,
+  type ProjectBoard,
+  type KanbanColumn,
   type ShareConnection,
   type ShareInvite,
   type VaultEntry,
@@ -594,10 +595,7 @@ export default function Dashboard({
   async function refreshProjectBoards(pListOverride?: Project[]) {
     const list = (pListOverride ?? projects) || [];
     const editable = list.filter((p) => p.canEdit);
-    if (editable.length === 0) {
-      setProjectBoards({});
-      return;
-    }
+    if (editable.length === 0) {      setProjectBoards({});      setProjectBoardsLoading(false);      return;    }
     setProjectBoardsLoading(true);
     try {
       const results = await Promise.all(
@@ -660,7 +658,7 @@ export default function Dashboard({
   useEffect(() => {
     refreshAll().catch(() => push('Falha ao carregar dados', 'error'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   useEffect(() => {
     refreshProjectBoards().catch(() => setProjectBoardsLoading(false));
@@ -1624,7 +1622,7 @@ export default function Dashboard({
 
             {/* Projects / Kanban */}
             {section === 'projects' && (
-              <ProjectsSection
+                            <ProjectsSection
                 projects={projects}
                 activeProjectId={activeProjectId}
                 setActiveProjectId={setActiveProjectId}
@@ -1633,22 +1631,32 @@ export default function Dashboard({
                 newProjectDesc={newProjectDesc}
                 setNewProjectDesc={setNewProjectDesc}
                 createNewProject={createNewProject}
-                creatingProject={creatingProject}                deletingProjectId={deletingProjectId}
+                creatingProject={creatingProject}
+                deletingProjectId={deletingProjectId}
                 removeProject={removeProject}
                 setProjectShareTarget={setProjectShareTarget}
                 setProjectShareOpen={setProjectShareModalOpen}
-                projectBoard={projectBoard}                boardSaving={boardSaving}                projectBoardLoading={projectBoardsLoading}
+                projectBoard={projectBoard}
+                boardSaving={boardSaving}
+                projectBoardLoading={projectBoardsLoading}
                 newColumnTitle={newColumnTitle}
                 setNewColumnTitle={setNewColumnTitle}
-                addKanbanColumn={addKanbanColumn}                addingColumn={addingColumn}
+                addKanbanColumn={addKanbanColumn}
+                addingColumn={addingColumn}
                 newCardTitle={newCardTitle}
                 setNewCardTitle={setNewCardTitle}
                 newCardDesc={newCardDesc}
                 setNewCardDesc={setNewCardDesc}
                 newCardColor={newCardColor}
-                setNewCardColor={setNewCardColor}                newCardProjectId={newCardProjectId}                setNewCardProjectId={setNewCardProjectId}
-                addKanbanCard={addKanbanCard}                addingCardToColumn={addingCardToColumn}
-                deleteKanbanCard={deleteKanbanCard}                draggingCardId={draggingCardId}                setDraggingCardId={setDraggingCardId}                dropCardToColumn={dropCardToColumn}
+                setNewCardColor={setNewCardColor}
+                newCardProjectId={newCardProjectId}
+                setNewCardProjectId={setNewCardProjectId}
+                addKanbanCard={addKanbanCard}
+                addingCardToColumn={addingCardToColumn}
+                deleteKanbanCard={deleteKanbanCard}
+                draggingCardId={draggingCardId}
+                setDraggingCardId={setDraggingCardId}
+                dropCardToColumn={dropCardToColumn}
                 moveKanbanCard={moveKanbanCard}
                 openCard={openCard}
               />
