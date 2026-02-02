@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import { initCsrf, logout, me, type SessionUser } from './lib/api';
+import { setClientLoggerUser } from './lib/clientLogger';
 import { ToastProvider, useToast } from './components/toast';
 import { fbAuth } from './lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -24,8 +25,10 @@ function AppInner() {
       try {
         const u = await me();
         setUser(u);
+        setClientLoggerUser({ uid: u.uid, email: u.email });
       } catch {
         setUser(null);
+        setClientLoggerUser(undefined);
       } finally {
         setInit(false);
       }
@@ -44,6 +47,7 @@ function AppInner() {
       // ignore
     }
     setUser(null);
+    setClientLoggerUser(undefined);
     push('Sessão encerrada', 'info');
     nav('/login');
   }
@@ -67,6 +71,7 @@ function AppInner() {
             <Login
               onLogged={(u) => {
                 setUser(u);
+                setClientLoggerUser({ uid: u.uid, email: u.email });
                 nav('/app');
               }}
             />

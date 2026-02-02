@@ -25,6 +25,10 @@ const schema = z.object({
   COOKIE_SECURE: z.coerce.boolean().optional().default(false),
 
   SESSION_TTL_MS: z.coerce.number().int().positive().optional().default(1000 * 60 * 60 * 12), // 12h
+
+  // (Opcional) tokens para leitura/escrita de logs de cliente
+  LOG_WRITE_TOKEN: z.string().optional(),
+  LOG_READ_TOKEN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

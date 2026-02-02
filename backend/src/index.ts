@@ -16,6 +16,7 @@ import { sharingRouter } from './routes/sharing';
 import { notesRouter } from './routes/notes';
 import { driveRouter } from './routes/drive';
 import { projectsRouter } from './routes/projects';
+import { logsRouter } from './routes/logs';
 
 const env = loadEnv();
 const app = express();
@@ -66,7 +67,7 @@ app.use(cors({
   origin: env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Authorization', 'X-Log-Token'],
 }));
 
 // Firebase Admin init
@@ -165,6 +166,18 @@ app.use('/projects', projectsRouter({
   fbAuth,
   fbDb,
 }));
+
+app.use('/logs', logsRouter({
+  logger,
+  readToken: env.LOG_READ_TOKEN,
+  writeToken: env.LOG_WRITE_TOKEN,
+}));
+
+// Error handler (captura erros do servidor)
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ type: 'server_error', message: err?.message, stack: err?.stack });
+  res.status(500).json({ ok: false, error: 'internal_error' });
+});
 
 app.listen(env.PORT, () => {
   logger.info({ type: 'startup', env: env.NODE_ENV, port: env.PORT });
