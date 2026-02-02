@@ -316,53 +316,52 @@ export default function ProjectsSection(props: Props) {
             </div>
           </div>
 
-          <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-slate-800">Seus projetos</h3>
-                <span className="text-xs text-slate-500">{projects.length}</span>
-              </div>
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-slate-800">Seus projetos</h3>
+              <span className="text-xs text-slate-500">{projects.length}</span>
+            </div>
 
-              <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
-                {filteredProjects.length === 0 ? (
-                  <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                    Nenhum projeto encontrado.
-                  </div>
-                ) : (
-                  filteredProjects.map((p) => {
-                    const isActive = p.id === activeProjectId;
-                    const sharedBadge = p.canEdit ? null : (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Compartilhado</span>
-                    );
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setActiveProjectId(p.id)}
-                        className={`w-full text-left rounded-xl border px-3 py-2 transition-all active:scale-[0.99] ${
-                          isActive
-                            ? 'border-blue-300 bg-blue-50 shadow-[0_0_0_3px_rgba(59,130,246,0.12)]'
-                            : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-slate-800 truncate">{p.name}</span>
-                              {sharedBadge}
-                            </div>
-                            {p.description ? (
-                              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
-                            ) : (
-                              <p className="text-xs text-slate-400 mt-1">Sem Descrio</p>
-                            )}
+            <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+              {filteredProjects.length === 0 ? (
+                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  Nenhum projeto encontrado.
+                </div>
+              ) : (
+                filteredProjects.map((p) => {
+                  const isActive = p.id === activeProjectId;
+                  const sharedBadge = p.canEdit ? null : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Compartilhado</span>
+                  );
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setActiveProjectId(p.id)}
+                      className={`w-full text-left rounded-xl border px-3 py-2 transition-all active:scale-[0.99] ${
+                        isActive
+                          ? 'border-blue-300 bg-blue-50 shadow-[0_0_0_3px_rgba(59,130,246,0.12)]'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-slate-800 truncate">{p.name}</span>
+                            {sharedBadge}
                           </div>
-                          {isActive && <CheckCircle2 size={18} className="text-blue-600 shrink-0" />}
+                          {p.description ? (
+                            <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
+                          ) : (
+                            <p className="text-xs text-slate-400 mt-1">Sem Descrio</p>
+                          )}
                         </div>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
+                        {isActive && <CheckCircle2 size={18} className="text-blue-600 shrink-0" />}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
