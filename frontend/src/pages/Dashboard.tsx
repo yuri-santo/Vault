@@ -596,7 +596,12 @@ export default function Dashboard({
   const [noteForm, setNoteForm] = useState({ title: '', content: '' });
   async function refreshProjectBoards(pListOverride?: Project[]) {
     const list = (pListOverride ?? projects) || [];
-    const viewable = list;    if (viewable.length === 0) {      setProjectBoards({});      setProjectBoardsLoading(false);      return;    }
+    const viewable = list;
+    if (viewable.length === 0) {
+      setProjectBoards({});
+      setProjectBoardsLoading(false);
+      return;
+    }
     setProjectBoardsLoading(true);
     try {
       const results = await Promise.all(
@@ -1038,7 +1043,11 @@ export default function Dashboard({
       push('Projeto excluído', 'success');
       const ps = projects.filter((p) => p.id !== id);
       setProjects(ps);
-      if (activeProjectId === id) {        setActiveProjectId(ps[0]?.id || null);      }      if (newCardProjectId === id) setNewCardProjectId(ps[0]?.id || '');      await refreshProjectBoards(ps);
+      if (activeProjectId === id) {
+        setActiveProjectId(ps[0]?.id || null);
+      }
+      if (newCardProjectId === id) setNewCardProjectId(ps[0]?.id || '');
+      await refreshProjectBoards(ps);
     } catch {
       push('Falha ao excluir projeto', 'error');
     }
@@ -2046,7 +2055,9 @@ export default function Dashboard({
         open={projectShareModalOpen}
         title={projectShareTarget ? `Compartilhar projeto: ${projectShareTarget.name}` : 'Compartilhar projeto'}
         onClose={() => {
-          setProjectShareModalOpen(false);          setProjectShareTarget(null);          setProjectShareAccess('edit');
+          setProjectShareModalOpen(false);
+          setProjectShareTarget(null);
+          setProjectShareAccess('edit');
         }}
       >
         <div className="text-sm text-zinc-600">
