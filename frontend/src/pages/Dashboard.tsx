@@ -719,10 +719,6 @@ export default function Dashboard({
       if (!cols[c.id]) {
         cols[c.id] = { id: c.id, title: c.title } as any;
         order.push(c.id);
-  const activeProjectBoard = useMemo(
-    () => (activeCardProjectId ? projectBoards[activeCardProjectId] || null : null),
-    [activeCardProjectId, projectBoards]
-  );
       }
     };
 
@@ -745,6 +741,11 @@ export default function Dashboard({
     }
     return { columns, cards } as ProjectBoard;
   }, [projectBoards, projects]);
+
+  const activeProjectBoard = useMemo(
+    () => (activeCardProjectId ? projectBoards[activeCardProjectId] || null : null),
+    [activeCardProjectId, projectBoards]
+  );
   // Debounced save for Kanban (helps with drag/drop)
   const kanbanSaveTimers = useRef<Record<string, any>>({});
 

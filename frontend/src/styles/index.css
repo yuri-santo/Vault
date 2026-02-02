@@ -8,12 +8,19 @@
 
 * { -webkit-tap-highlight-color: transparent; }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-feature-settings: "ss01" 1, "ss02" 1;
 }
 
-/* Nice scrollbar */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(24,24,27,0.12); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(24,24,27,0.18); }
+/* Nice scrollbar (only for WebKit) */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(24,24,27,0.12); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(24,24,27,0.18); }
+}
