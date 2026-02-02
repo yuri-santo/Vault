@@ -167,6 +167,14 @@ app.use('/projects', projectsRouter({
   fbDb,
 }));
 
+// Logs do navegador (público e sem credenciais)
+app.use('/logs', cors({
+  origin: true,
+  credentials: false,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-Log-Token'],
+}));
+
 app.use('/logs', logsRouter({
   logger,
   readToken: env.LOG_READ_TOKEN,
