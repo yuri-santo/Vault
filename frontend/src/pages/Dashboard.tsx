@@ -576,8 +576,7 @@ export default function Dashboard({
   }
 
   function handleBoardWheel(e: React.WheelEvent) {
-    // Zoom with mouse wheel (Ctrl/Cmd or Alt). Keeps normal scrolling when not zooming.
-    if (!(e.ctrlKey || e.metaKey || e.altKey)) return;
+    // Zoom with mouse wheel over the board.
     e.preventDefault();
     const dir = e.deltaY > 0 ? -1 : 1;
     setBoardZoom((z) => clampNum(Number((z + dir * 0.06).toFixed(2)), 0.55, 1.85));
@@ -1693,6 +1692,11 @@ export default function Dashboard({
                 dropCardToColumn={dropCardToColumn}
                 moveKanbanCard={moveKanbanCard}
                 openCard={openCard}
+                boardFullscreen={boardFullscreen}
+                setBoardFullscreen={setBoardFullscreen}
+                boardZoom={boardZoom}
+                setBoardZoom={setBoardZoom}
+                onBoardWheel={handleBoardWheel}
               />
             )}
 

@@ -75,6 +75,13 @@ type Props = {
 
   // Modal de card (renderizado no Dashboard)
   openCard: (cardId: string, projectId?: string | null) => void;
+
+  // UI
+  boardFullscreen: boolean;
+  setBoardFullscreen: (v: boolean) => void;
+  boardZoom: number;
+  setBoardZoom: (v: number | ((prev: number) => number)) => void;
+  onBoardWheel: (e: React.WheelEvent) => void;
 };
 
 function sortColumns(cols: BoardColumn[]): BoardColumn[] {
@@ -151,6 +158,11 @@ export default function ProjectsSection(props: Props) {
     dropCardToColumn,
     deleteKanbanCard,
     openCard,
+    boardFullscreen,
+    setBoardFullscreen,
+    boardZoom,
+    setBoardZoom,
+    onBoardWheel,
   } = props;
 
   const [projectSearch, setProjectSearch] = useState('');
@@ -237,6 +249,33 @@ export default function ProjectsSection(props: Props) {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBoardFullscreen(!boardFullscreen)}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98]"
+              title={boardFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+            >
+              {boardFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+            </button>
+
+            <div className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-slate-200 bg-white">
+              <button
+                type="button"
+                onClick={() => setBoardZoom((z: number) => Math.max(0.6, Math.round((z - 0.1) * 10) / 10))}
+                className="px-2 text-sm text-slate-600 hover:text-slate-900"
+                title="Afastar"
+              >-</button>
+              <span className="text-xs text-slate-600 w-10 text-center">{Math.round(boardZoom * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setBoardZoom((z: number) => Math.min(1.8, Math.round((z + 0.1) * 10) / 10))}
+                className="px-2 text-sm text-slate-600 hover:text-slate-900"
+                title="Aproximar"
+              >+</button>
+            </div>
+          </div>
+
           {activeProject && (
             <button
               type="button"
@@ -380,7 +419,7 @@ export default function ProjectsSection(props: Props) {
         </div>
 
         {/* Right panel: kanban */}
-        <div className="bg-[#F4F5F7]">
+        <div className={boardFullscreen ? 'fixed inset-0 z-50 bg-[#F4F5F7] p-4 overflow-auto' : 'bg-[#F4F5F7]'}>
           <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-slate-800 truncate">
@@ -438,7 +477,7 @@ export default function ProjectsSection(props: Props) {
               <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="text-sm font-bold text-slate-800">Novo card</div>
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                   <select
                     value={newCardProjectId}
                     onChange={(e) => setNewCardProjectId(e.target.value)}
@@ -515,7 +554,11 @@ export default function ProjectsSection(props: Props) {
                 </div>
               </div>
 
-              <div className="flex gap-4 overflow-x-auto pb-4">
+              <div onWheel={onBoardWheel} className="overflow-auto">
+                <div
+                  style={{ transform: `scale(${boardZoom})`, transformOrigin: 'top left', width: `calc(100% / ${boardZoom})` }}
+                  className="flex gap-4 overflow-x-auto pb-4"
+                >
                 {columns.map((col) => (
                   <div
                     key={col.id}
@@ -587,6 +630,7 @@ export default function ProjectsSection(props: Props) {
 
                 {/* hint */}
                 <div className="w-20 shrink-0" />
+                </div>
               </div>
               </div>
             )}
