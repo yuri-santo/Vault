@@ -32,6 +32,12 @@ type Props = {
   activeProjectId: string | null;
   setActiveProjectId: (id: string | null) => void;
   // Projetos
+  newProjectName: string;
+  setNewProjectName: (v: string) => void;
+  newProjectDesc: string;
+  setNewProjectDesc: (v: string) => void;
+  createNewProject: () => Promise<void>;
+  creatingProject: boolean;
   removeProject: (id: string) => Promise<void>;
   deletingProjectId: string | null;
 
@@ -115,6 +121,12 @@ export default function ProjectsSection(props: Props) {
     projects,
     activeProjectId,
     setActiveProjectId,
+    newProjectName,
+    setNewProjectName,
+    newProjectDesc,
+    setNewProjectDesc,
+    createNewProject,
+    creatingProject,
     removeProject,
     deletingProjectId,
     setProjectShareTarget,
@@ -218,7 +230,7 @@ export default function ProjectsSection(props: Props) {
   const isBusy = projectBoardLoading || boardSaving;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-visible">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 bg-gradient-to-b from-white to-slate-50">
         <div className="flex items-center gap-3">
@@ -316,6 +328,39 @@ export default function ProjectsSection(props: Props) {
             </div>
           </div>
 
+          <div className="p-4 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-slate-800">Novo projeto</h3>
+            </div>
+            <div className="space-y-2">
+              <input
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="Nome do projeto"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Nome do projeto"
+                disabled={creatingProject}
+              />
+              <input
+                value={newProjectDesc}
+                onChange={(e) => setNewProjectDesc(e.target.value)}
+                placeholder="Descricao (opcional)"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Descricao do projeto"
+                disabled={creatingProject}
+              />
+              <button
+                type="button"
+                onClick={createNewProject}
+                disabled={creatingProject || !(newProjectName ?? '').trim()}
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60 active:scale-[0.98]"
+              >
+                {creatingProject ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                Criar projeto
+              </button>
+            </div>
+          </div>
+
           <div className="p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-bold text-slate-800">Seus projetos</h3>
@@ -367,7 +412,7 @@ export default function ProjectsSection(props: Props) {
         </div>
 
         {/* Right panel: kanban */}
-        <div className={boardFullscreen ? 'fixed inset-0 z-50 bg-[#F4F5F7] p-4 overflow-auto' : 'bg-[#F4F5F7]'}>
+        <div className={boardFullscreen ? 'fixed inset-0 z-50 bg-[#F4F5F7] p-4 overflow-auto' : 'bg-[#F4F5F7] overflow-auto'}>
           <div className="px-5 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-slate-800 truncate">
@@ -383,6 +428,17 @@ export default function ProjectsSection(props: Props) {
             </div>
 
             <div className="flex items-center gap-2">
+              {boardFullscreen && (
+                <button
+                  type="button"
+                  onClick={() => setBoardFullscreen(false)}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98]"
+                  title="Sair da tela cheia"
+                >
+                  Sair da tela cheia
+                </button>
+              )}
+
               {boardSaving && (
                 <div className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
                   <Loader2 size={14} className="animate-spin" /> Salvando...
@@ -476,12 +532,12 @@ export default function ProjectsSection(props: Props) {
                   disabled={isBusy || !activeProjectId}
                 />
 
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex flex-col sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => activeProjectId && addKanbanCard(newCardColumnId, activeProjectId)}
                     disabled={!activeProjectId || !newCardColumnId || !(newCardTitle ?? "").trim() || addingCardToColumn === newCardColumnId}
-                    className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
                   >
                     {addingCardToColumn === newCardColumnId ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                     Adicionar card
