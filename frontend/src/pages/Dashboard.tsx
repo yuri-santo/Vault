@@ -526,6 +526,7 @@ export default function Dashboard({
   const [newCardEmailSubject, setNewCardEmailSubject] = useState('');
   const [newCardEmailBody, setNewCardEmailBody] = useState('');
   const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [newProjectType, setNewProjectType] = useState<'sap' | 'general'>('sap');
@@ -963,6 +964,8 @@ export default function Dashboard({
   async function createNewProject() {
     const name = newProjectName.trim();
     if (!name) return push('Informe o nome do projeto', 'error');
+
+    setCreatingProject(true);
     try {
       const rate = parseFloat(String(newProjectHourlyRate).replace(',', '.'));
       await createProject(name, newProjectDesc.trim() || null, newProjectType, isFinite(rate) ? rate : null);
@@ -981,6 +984,8 @@ export default function Dashboard({
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Falha ao criar projeto';
       push(msg, 'error');
+    } finally {
+      setCreatingProject(false);
     }
   }
 
