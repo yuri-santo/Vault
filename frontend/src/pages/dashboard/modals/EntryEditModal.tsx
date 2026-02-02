@@ -2,6 +2,7 @@ import React from 'react';
 import { Button, Input, Textarea } from '../../../components/ui';
 import { Modal } from '../../../components/modal';
 import { Icon } from '../Icons';
+import { copyText as copyToClipboard } from '../../../lib/clipboard';
 
 // NOTE: Keeping this component intentionally flexible to avoid blocking builds
 // while the data model evolves. We can tighten types later.
@@ -14,7 +15,6 @@ export default function EntryEditModal({
   setSapConn,
   vpnConn,
   setVpnConn,
-  copyText,
   onClose,
   onSave,
 }: {
@@ -26,7 +26,6 @@ export default function EntryEditModal({
   setSapConn: React.Dispatch<React.SetStateAction<any>>;
   vpnConn: any;
   setVpnConn: React.Dispatch<React.SetStateAction<any>>;
-  copyText: (text: string) => void | Promise<void>;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -72,7 +71,7 @@ export default function EntryEditModal({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => copyText(form.url)}
+                onClick={() => copyToClipboard(form.url)}
                 disabled={!String(form.url || '').trim()}
                 title="Copiar"
               >
@@ -133,7 +132,7 @@ export default function EntryEditModal({
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => copyText(JSON.stringify(sapConn, null, 2))}
+                  onClick={() => copyToClipboard(JSON.stringify(sapConn, null, 2))}
                   title="Copiar JSON"
                 >
                   <Icon name="copy" className="h-4 w-4" />
@@ -180,7 +179,7 @@ export default function EntryEditModal({
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => copyText(JSON.stringify(vpnConn, null, 2))}
+                  onClick={() => copyToClipboard(JSON.stringify(vpnConn, null, 2))}
                   title="Copiar JSON"
                 >
                   <Icon name="copy" className="h-4 w-4" />

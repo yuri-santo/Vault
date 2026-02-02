@@ -165,10 +165,6 @@ function EntryActions({
   const boxRef = useRef<HTMLDivElement>(null);
   useOutsideClick(boxRef, () => setOpen(false));
   const { push } = useToast();
-
-  const copyText = useCallback(async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(String(text ?? ''));
       push('Copiado ✅', 'success');
     } catch {
       push('Não foi possível copiar', 'error');
@@ -1617,7 +1613,7 @@ export default function Dashboard({
                   setNoteModalOpen(true);
                 }}
                 onDeleteNote={(n) => deleteNote(n.id)}
-                onCopyContent={(content) => copyText(content)}
+                onCopyContent={(content) => copyToClipboard(content)}
               />
             )}
 
@@ -1635,7 +1631,6 @@ export default function Dashboard({
         setSapConn={setSapConn as any}
         vpnConn={vpnConn as any}
         setVpnConn={setVpnConn as any}
-        copyText={copyText}
         onClose={() => setModalOpen(false)}
         onSave={saveEntry}
       />
@@ -1692,7 +1687,7 @@ export default function Dashboard({
                     )}
                   </div>
                   {copyable && value ? (
-                    <Button type="button" variant="secondary" onClick={() => copyText(String(value))} title="Copiar">
+                    <Button type="button" variant="secondary" onClick={() => copyToClipboard(String(value))} title="Copiar">
                       <Icon name="copy" className="h-4 w-4" />
                     </Button>
                   ) : null}
@@ -1709,7 +1704,7 @@ export default function Dashboard({
                       {JSON.stringify(obj, null, 2)}
                     </div>
                   </div>
-                  <Button type="button" variant="secondary" onClick={() => copyText(JSON.stringify(obj, null, 2))} title="Copiar JSON">
+                  <Button type="button" variant="secondary" onClick={() => copyToClipboard(JSON.stringify(obj, null, 2))} title="Copiar JSON">
                     <Icon name="copy" className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1755,7 +1750,7 @@ export default function Dashboard({
                       <Button type="button" variant="secondary" onClick={() => setViewReveal((p) => !p)} disabled={!pass} title={viewReveal ? 'Ocultar' : 'Mostrar'}>
                         <Icon name="eye" className="h-4 w-4" />
                       </Button>
-                      <Button type="button" variant="secondary" onClick={() => copyText(String(pass))} disabled={!pass} title="Copiar senha">
+                      <Button type="button" variant="secondary" onClick={() => copyToClipboard(String(pass))} disabled={!pass} title="Copiar senha">
                         <Icon name="copy" className="h-4 w-4" />
                       </Button>
                     </div>
