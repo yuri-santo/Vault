@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Share2, Trash2, Loader2, CheckCircle2, KanbanSquare, Search, X } from '../../components/icons';
 import type { Project } from '../../lib/api';
 
@@ -63,6 +63,8 @@ type Props = {
   setNewCardColor: React.Dispatch<React.SetStateAction<CardColor>>;
   newCardProjectId: string;
   setNewCardProjectId: (v: string) => void;
+  newCardColumnId: string;
+  setNewCardColumnId: (v: string) => void;
   addKanbanCard: (columnId: string, projectId: string) => Promise<void>;
   addingCardToColumn: string | null;
 
@@ -83,11 +85,11 @@ function sortColumns(cols: BoardColumn[]): BoardColumn[] {
     return ao - bo;
   });
 
-  // garante "Concluídos" por Ãºltimo
+  // garante "Concludos" por Ãºltimo
   const doneIdx = cloned.findIndex((c) => c.id === 'done');
   if (doneIdx >= 0) {
     const [done] = cloned.splice(doneIdx, 1);
-    cloned.push({ ...done, title: done.title || 'Concluídos' });
+    cloned.push({ ...done, title: done.title || 'Concludos' });
   }
   return cloned;
 }
@@ -140,6 +142,8 @@ export default function ProjectsSection(props: Props) {
     setNewCardColor,
     newCardProjectId,
     setNewCardProjectId,
+    newCardColumnId,
+    setNewCardColumnId,
     addKanbanCard,
     addingCardToColumn,
     draggingCardId,
@@ -169,6 +173,12 @@ export default function ProjectsSection(props: Props) {
 
   const columns = useMemo(() => (projectBoard ? sortColumns(projectBoard.columns) : []), [projectBoard]);
   const cards = useMemo(() => (projectBoard ? sortCards(projectBoard.cards) : []), [projectBoard]);
+
+  useEffect(() => {
+    if (!columns.length) return;
+    const has = columns.some((c) => c.id === newCardColumnId);
+    if (!has) setNewCardColumnId(columns[0].id);
+  }, [columns, newCardColumnId, setNewCardColumnId]);
 
   const cardsByColumn = useMemo(() => {
     const map: Record<string, BoardCard[]> = {};
@@ -300,10 +310,10 @@ export default function ProjectsSection(props: Props) {
               <textarea
                 value={newProjectDesc}
                 onChange={(e) => setNewProjectDesc(e.target.value)}
-                placeholder="Descrição (opcional)"
+                placeholder="Descrio (opcional)"
                 className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 rows={2}
-                aria-label="Descrição do projeto"
+                aria-label="Descrio do projeto"
               />
 
               <div className="flex items-center justify-between gap-2 mt-3"><button
@@ -355,7 +365,7 @@ export default function ProjectsSection(props: Props) {
                             {p.description ? (
                               <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
                             ) : (
-                              <p className="text-xs text-slate-400 mt-1">Sem Descrição</p>
+                              <p className="text-xs text-slate-400 mt-1">Sem Descrio</p>
                             )}
                           </div>
                           {isActive && <CheckCircle2 size={18} className="text-blue-600 shrink-0" />}
@@ -425,6 +435,85 @@ export default function ProjectsSection(props: Props) {
                 Nao foi possivel carregar o quadro.
               </div>
             ) : (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-sm font-bold text-slate-800">Novo card</div>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <select
+                    value={newCardProjectId}
+                    onChange={(e) => setNewCardProjectId(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Projeto do card"
+                    disabled={isBusy}
+                  >
+                    <option value="">Projeto</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id} disabled={!p.canEdit}>
+                        {p.name}
+                        {!p.canEdit ? ' (somente leitura)' : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={newCardColumnId}
+                    onChange={(e) => setNewCardColumnId(e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Coluna do card"
+                    disabled={isBusy || !columns.length}
+                  >
+                    <option value="">Coluna</option>
+                    {columns.map((c) => (
+                      <option key={c.id} value={c.id}>{c.id === 'done' ? 'Conclu?dos' : c.title}</option>
+                    ))}
+                  </select>
+
+                  <input
+                    value={newCardTitle}
+                    onChange={(e) => setNewCardTitle(e.target.value)}
+                    placeholder="Titulo do card"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Titulo do card"
+                    disabled={isBusy}
+                  />
+
+                  <select
+                    value={newCardColor}
+                    onChange={(e) => setNewCardColor(e.target.value as CardColor)}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Cor do card"
+                    disabled={isBusy}
+                  >
+                    <option value="white">Branco</option>
+                    <option value="yellow">Amarelo</option>
+                    <option value="blue">Azul</option>
+                    <option value="green">Verde</option>
+                    <option value="pink">Rosa</option>
+                  </select>
+                </div>
+
+                <textarea
+                  value={newCardDesc}
+                  onChange={(e) => setNewCardDesc(e.target.value)}
+                  placeholder="Descri??o (opcional)"
+                  className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows={2}
+                  aria-label="Descri??o do card"
+                  disabled={isBusy}
+                />
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => addKanbanCard(newCardColumnId, newCardProjectId)}
+                    disabled={!newCardProjectId || !newCardColumnId || !(newCardTitle ?? "").trim() || addingCardToColumn === newCardColumnId}
+                    className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
+                  >
+                    {addingCardToColumn === newCardColumnId ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    Adicionar card
+                  </button>
+                </div>
+              </div>
+
               <div className="flex gap-4 overflow-x-auto pb-4">
                 {columns.map((col) => (
                   <div
@@ -434,7 +523,7 @@ export default function ProjectsSection(props: Props) {
                     onDrop={(e) => onDrop(e, col.id)}
                   >
                     <div className="p-4 border-b border-slate-200 bg-[#F4F5F7] rounded-t-2xl flex items-center justify-between sticky top-0">
-                      <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">{col.id === 'done' ? 'Concluídos' : col.title}</span>
+                      <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">{col.id === 'done' ? 'Concludos' : col.title}</span>
                       <span className="text-xs font-bold text-slate-600 bg-slate-200 px-2 py-1 rounded-full">
                         {(cardsByColumn[col.id] || []).length}
                       </span>
@@ -492,67 +581,6 @@ export default function ProjectsSection(props: Props) {
                       ) : null}
                     </div>
 
-                    {/* Add card */}
-                    <div className="p-3 border-t border-slate-200 bg-[#F4F5F7] rounded-b-2xl">
-                      <div className="space-y-2">
-                        <select
-                          value={newCardProjectId}
-                          onChange={(e) => setNewCardProjectId(e.target.value)}
-                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          aria-label="Projeto do card"
-                          disabled={isBusy}
-                        >
-                          <option value="">Selecione o projeto do card</option>
-                          {projects.map((p) => (
-                            <option key={p.id} value={p.id} disabled={!p.canEdit}>
-                              {p.name}
-                              {!p.canEdit ? ' (somente leitura)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          value={newCardTitle}
-                          onChange={(e) => setNewCardTitle(e.target.value)}
-                          placeholder="Titulo do card"
-                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          aria-label="Titulo do card"
-                          disabled={isBusy}
-                        />
-                        <textarea
-                          value={newCardDesc}
-                          onChange={(e) => setNewCardDesc(e.target.value)}
-                          placeholder="Descrição (opcional)"
-                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                          rows={2}
-                          aria-label="Descrição do card"
-                          disabled={isBusy}
-                        />
-                        <div className="flex items-center justify-between gap-2">
-                          <select
-                            value={newCardColor}
-                            onChange={(e) => setNewCardColor(e.target.value as CardColor)}
-                            className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            aria-label="Cor do card"
-                            disabled={isBusy}
-                          >
-                            <option value="white">Branco</option>
-                            <option value="yellow">Amarelo</option>
-                            <option value="blue">Azul</option>
-                            <option value="green">Verde</option>
-                            <option value="pink">Rosa</option>
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => addKanbanCard(col.id, newCardProjectId)}
-                            disabled={!newCardProjectId || !(newCardTitle ?? "").trim() || addingCardToColumn === col.id}
-                            className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
-                          >
-                            {addingCardToColumn === col.id ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                            Card
-                          </button>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 ))}
 
@@ -566,3 +594,8 @@ export default function ProjectsSection(props: Props) {
     </section>
   );
 }
+
+
+
+
+

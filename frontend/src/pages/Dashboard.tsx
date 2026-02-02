@@ -1104,28 +1104,43 @@ export default function Dashboard({
   }
 
   async function addKanbanCard(columnId: string, projectId: string) {
-    const board = projectBoards[projectId];
-    if (!board) return;
+    const pid = String(projectId || '').trim();
+    const colId = String(columnId || '').trim();
+    if (!pid) return push('Selecione um projeto', 'error');
+    if (!colId) return push('Selecione uma coluna', 'error');
+    const board = projectBoards[pid];
+    if (!board) return push('Quadro do projeto ainda n?o carregou', 'error');
     const title = String(newCardTitle ?? '').trim();
     if (!title) return push('Informe o titulo do card', 'error');
 
-    setAddingCardToColumn(columnId);
+    const targetProject = projects.find((x) => x.id === pid);
+    if (targetProject && targetProject.canEdit === false) {
+      return push('Projeto em modo somente leitura', 'error');
+    }
+
+    setAddingCardToColumn(colId);
     try {
       const id = `c_${Math.random().toString(36).slice(2, 10)}`;
       const now = new Date().toISOString();
-      const projectType = (projects.find((x) => x.id === projectId)?.projectType ?? 'general') as any;
+      const projectType = (targetProject?.projectType ?? 'general') as any;
+      const hasColumn = board.columns.some((c) => c.id === colId);
+      const fallbackCol = DEFAULT_PROJECT_BOARD.columns.find((c) => c.id === colId);
+      const nextColumns = hasColumn
+        ? board.columns
+        : [...board.columns, { id: colId, title: fallbackCol?.title || colId } as any];
       const next: ProjectBoard = {
         ...board,
+        columns: nextColumns,
         cards: [
           ...board.cards,
           {
             id,
-            columnId,
+            columnId: colId,
             title,
             description: String(newCardDesc ?? '').trim() || null,
             type: projectType,
             color: newCardColor,
-            order: (board.cards.filter((c) => c.columnId === columnId).length ?? 0) * 10,
+            order: (board.cards.filter((c) => c.columnId === colId).length ?? 0) * 10,
             createdAt: now,
             updatedAt: now,
           },
@@ -1133,7 +1148,8 @@ export default function Dashboard({
       };
       setNewCardTitle('');
       setNewCardDesc('');
-      await saveBoard(projectId, next);
+      setBoardAndScheduleSave(pid, next);
+      push('Card criado', 'success');
     } finally {
       setAddingCardToColumn(null);
     }
@@ -1667,6 +1683,8 @@ export default function Dashboard({
                 setNewCardColor={setNewCardColor}
                 newCardProjectId={newCardProjectId}
                 setNewCardProjectId={setNewCardProjectId}
+                newCardColumnId={newCardColumnId}
+                setNewCardColumnId={setNewCardColumnId}
                 addKanbanCard={addKanbanCard}
                 addingCardToColumn={addingCardToColumn}
                 deleteKanbanCard={deleteKanbanCard}
