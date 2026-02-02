@@ -682,7 +682,7 @@ export default function Dashboard({
   }, [activeProjectId]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = (query ?? '').trim().toLowerCase();
     return entries.filter((e) => {
       if (alphaFilter) {
         const n = (e.name ?? '').trim();
@@ -690,9 +690,12 @@ export default function Dashboard({
       }
       if (advFilters.scope === 'mine' && !e.canEdit) return false;
       if (advFilters.scope === 'shared' && !e.isShared) return false;
-      if (advFilters.ownerEmail.trim()) {
-        const own = (e.ownerEmail ?? '').toLowerCase();
-        if (!own.includes(advFilters.ownerEmail.trim().toLowerCase())) return false;
+      {
+        const ownerEmail = String(advFilters.ownerEmail ?? '').trim().toLowerCase();
+        if (ownerEmail) {
+          const own = (e.ownerEmail ?? '').toLowerCase();
+          if (!own.includes(ownerEmail)) return false;
+        }
       }
       if (advFilters.hasSap) {
         const has = Boolean((e as any).sapJson) || Boolean((e as any).sapConnection);
@@ -807,7 +810,7 @@ export default function Dashboard({
   }
 
   async function saveEntry() {
-    if (!form.name.trim()) {
+    if (!String(form.name ?? '').trim()) {
       push('Informe o nome do serviço', 'error');
       return;
     }
@@ -883,7 +886,7 @@ export default function Dashboard({
   }
 
   async function doSendInvite() {
-    const email = shareEmail.trim();
+    const email = String(shareEmail ?? '').trim();
     if (!email.includes('@')) return push('Informe um e-mail válido', 'error');
     try {
       await sendInvite(email);
@@ -916,7 +919,7 @@ export default function Dashboard({
   }
 
   async function saveDriveFolder() {
-    const raw = driveFolder.trim();
+    const raw = String(driveFolder ?? '').trim();
     if (!raw) return push('Cole o link/ID da pasta', 'error');
     try {
       await setDriveFolder(raw);
@@ -976,13 +979,13 @@ export default function Dashboard({
   }
 
   async function createNewProject() {
-    const name = newProjectName.trim();
+    const name = String(newProjectName ?? '').trim();
     if (!name) return push('Informe o nome do projeto', 'error');
 
     setCreatingProject(true);
     try {
       const rate = parseFloat(String(newProjectHourlyRate).replace(',', '.'));
-      const created = await createProject(name, newProjectDesc.trim() || null, newProjectType, isFinite(rate) ? rate : null);
+      const created = await createProject(name, String(newProjectDesc ?? '').trim() || null, newProjectType, isFinite(rate) ? rate : null);
       // Garante um kanban padrão com coluna "Concluído" no final.
       // Best-effort: se falhar, o projeto ainda existe.
       if (created?.id) {
@@ -1052,7 +1055,7 @@ export default function Dashboard({
 
   async function addKanbanColumn() {
     if (!projectBoard) return;
-    const title = newColumnTitle.trim();
+    const title = String(newColumnTitle ?? '').trim();
     if (!title) return push('Informe o título da coluna', 'error');
 
     // Simple ID generation (works in browsers without crypto.randomUUID)
@@ -1069,7 +1072,7 @@ export default function Dashboard({
 
   async function addKanbanCard(columnId: string) {
     if (!projectBoard) return;
-    const title = newCardTitle.trim();
+    const title = String(newCardTitle ?? '').trim();
     if (!title) return push('Informe o título do card', 'error');
     const id = `c_${Math.random().toString(36).slice(2, 10)}`;
     const now = new Date().toISOString();
@@ -1081,7 +1084,7 @@ export default function Dashboard({
           id,
           columnId,
           title,
-          description: newCardDesc.trim() || null,
+          description: String(newCardDesc ?? '').trim() || null,
           type: (projects.find((x) => x.id === activeProjectId)?.projectType ?? 'sap') as any,
           color: newCardColor,
           order: (projectBoard.cards.filter((c) => c.columnId === columnId).length ?? 0) * 10,
@@ -1185,16 +1188,16 @@ export default function Dashboard({
       : null;
     const nextCard: KanbanCard = {
       ...activeCard,
-      title: cardEdit.title.trim() || activeCard.title,
-      description: cardEdit.description?.trim() ? cardEdit.description.trim() : null,
+      title: String(cardEdit.title ?? '').trim() || activeCard.title,
+      description: String(cardEdit.description ?? '').trim() ? String(cardEdit.description ?? '').trim() : null,
       type: cardEdit.type as any,
       estimateHours: isFinite(est) ? est : null,
       priority: (['low', 'med', 'high', 'urgent'].includes(priority) ? priority : 'med') as any,
       dueDate: dueDateRaw || null,
       checklist,
       color: (['yellow', 'blue', 'green', 'pink', 'white'].includes(color) ? color : 'yellow') as any,
-      qaNotes: cardEdit.qaNotes?.trim() ? cardEdit.qaNotes.trim() : null,
-      prodNotes: cardEdit.prodNotes?.trim() ? cardEdit.prodNotes.trim() : null,
+      qaNotes: String(cardEdit.qaNotes ?? '').trim() ? String(cardEdit.qaNotes ?? '').trim() : null,
+      prodNotes: String(cardEdit.prodNotes ?? '').trim() ? String(cardEdit.prodNotes ?? '').trim() : null,
       tags: cardEdit.tags
         ? cardEdit.tags
             .split(',')
@@ -1229,7 +1232,7 @@ export default function Dashboard({
 
   async function addCardComment() {
     if (!projectBoard || !activeProjectId || !activeCard) return;
-    const text = newCardComment.trim();
+    const text = String(newCardComment ?? '').trim();
     if (!text) return;
     const now = new Date().toISOString();
     const nextCard: KanbanCard = {
@@ -1248,8 +1251,8 @@ export default function Dashboard({
 
   async function addCardEmail() {
     if (!projectBoard || !activeProjectId || !activeCard) return;
-    const subj = newCardEmailSubject.trim();
-    const body = newCardEmailBody.trim();
+    const subj = String(newCardEmailSubject ?? '').trim();
+    const body = String(newCardEmailBody ?? '').trim();
     if (!subj && !body) return;
     const now = new Date().toISOString();
     const nextCard: KanbanCard = {
@@ -1805,7 +1808,7 @@ export default function Dashboard({
             <Button variant="secondary" onClick={() => setNoteModalOpen(false)}>Cancelar</Button>
             <Button
               onClick={async () => {
-                const title = noteForm.title.trim() || 'Sem título';
+                const title = String(noteForm.title ?? '').trim() || 'Sem título';
                 const content = noteForm.content;
                 try {
                   if (editingNote) {

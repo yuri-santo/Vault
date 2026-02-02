@@ -154,7 +154,8 @@ export default function ProjectsSection(props: Props) {
   );
 
   const filteredProjects = useMemo(() => {
-    const q = projectSearch.trim().toLowerCase();
+    // Defensive: avoid runtime errors if some input/component ever passes undefined/null
+    const q = (projectSearch ?? '').trim().toLowerCase();
     if (!q) return projects;
     return projects.filter((p) => {
       const t = (p.title || '').toLowerCase();
@@ -253,12 +254,12 @@ export default function ProjectsSection(props: Props) {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 value={projectSearch}
-                onChange={(e) => setProjectSearch(e.target.value)}
+                onChange={(e) => setProjectSearch(e.target.value ?? '')}
                 placeholder="Buscar projetos..."
                 className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Buscar projetos"
               />
-              {projectSearch.trim() && (
+              {!!(projectSearch ?? '').trim() && (
                 <button
                   type="button"
                   onClick={() => setProjectSearch('')}
@@ -306,7 +307,7 @@ export default function ProjectsSection(props: Props) {
                 <button
                   type="button"
                   onClick={createNewProject}
-                  disabled={!newProjectTitle.trim() || creatingProject}
+                  disabled={!(newProjectTitle ?? '').trim() || creatingProject}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
                 >
                   {creatingProject ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -402,7 +403,7 @@ export default function ProjectsSection(props: Props) {
                 <button
                   type="button"
                   onClick={addKanbanColumn}
-                  disabled={!activeProject || !activeProject.canEdit || !newColumnTitle.trim() || addingColumn}
+                  disabled={!activeProject || !activeProject.canEdit || !(newColumnTitle ?? '').trim() || addingColumn}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-60 active:scale-[0.98]"
                 >
                   {addingColumn ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -527,7 +528,7 @@ export default function ProjectsSection(props: Props) {
                           <button
                             type="button"
                             onClick={() => addKanbanCard(col.id)}
-                            disabled={!activeProject.canEdit || !newCardTitle.trim() || addingCardToColumn === col.id}
+                            disabled={!activeProject.canEdit || !(newCardTitle ?? '').trim() || addingCardToColumn === col.id}
                             className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
                           >
                             {addingCardToColumn === col.id ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}

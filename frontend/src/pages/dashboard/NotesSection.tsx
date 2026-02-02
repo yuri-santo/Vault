@@ -71,7 +71,8 @@ export default function NotesSection(props: Props) {
   } = props;
 
   const filtered = useMemo(() => {
-    const q = noteQuery.trim().toLowerCase();
+    // Defensive: avoid runtime errors if noteQuery ever becomes undefined/null
+    const q = (noteQuery ?? '').trim().toLowerCase();
     return noteItems
       .filter((n) => {
         if (!q) return true;
