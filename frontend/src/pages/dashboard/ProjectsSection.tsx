@@ -31,15 +31,8 @@ type Props = {
   projects: Project[];
   activeProjectId: string | null;
   setActiveProjectId: (id: string | null) => void;
-
-  // CRUD de projetos
-  newProjectName: string;
-  setNewProjectName: (v: string) => void;
-  newProjectDesc: string;
-  setNewProjectDesc: (v: string) => void;
-  createNewProject: () => Promise<void>;
+  // Projetos
   removeProject: (id: string) => Promise<void>;
-  creatingProject: boolean;
   deletingProjectId: string | null;
 
   // Compartilhamento (modal é renderizado no Dashboard)
@@ -61,8 +54,6 @@ type Props = {
   setNewCardDesc: (v: string) => void;
   newCardColor: CardColor;
   setNewCardColor: React.Dispatch<React.SetStateAction<CardColor>>;
-  newCardProjectId: string;
-  setNewCardProjectId: (v: string) => void;
   newCardColumnId: string;
   setNewCardColumnId: (v: string) => void;
   addKanbanCard: (columnId: string, projectId: string) => Promise<void>;
@@ -92,11 +83,11 @@ function sortColumns(cols: BoardColumn[]): BoardColumn[] {
     return ao - bo;
   });
 
-  // garante "Concludos" por último
+  // garante "Concluidos" por último
   const doneIdx = cloned.findIndex((c) => c.id === 'done');
   if (doneIdx >= 0) {
     const [done] = cloned.splice(doneIdx, 1);
-    cloned.push({ ...done, title: done.title || 'Concludos' });
+    cloned.push({ ...done, title: done.title || 'Concluidos' });
   }
   return cloned;
 }
@@ -124,13 +115,7 @@ export default function ProjectsSection(props: Props) {
     projects,
     activeProjectId,
     setActiveProjectId,
-    newProjectName,
-    setNewProjectName,
-    newProjectDesc,
-    setNewProjectDesc,
-    createNewProject,
     removeProject,
-    creatingProject,
     deletingProjectId,
     setProjectShareTarget,
     setProjectShareOpen,
@@ -147,8 +132,6 @@ export default function ProjectsSection(props: Props) {
     setNewCardDesc,
     newCardColor,
     setNewCardColor,
-    newCardProjectId,
-    setNewCardProjectId,
     newCardColumnId,
     setNewCardColumnId,
     addKanbanCard,
@@ -232,7 +215,7 @@ export default function ProjectsSection(props: Props) {
     await dropCardToColumn(cardId, columnId, projectId);
   };
 
-  const isBusy = creatingProject || projectBoardLoading || boardSaving;
+  const isBusy = projectBoardLoading || boardSaving;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -244,7 +227,7 @@ export default function ProjectsSection(props: Props) {
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-800 leading-tight">Projetos</h2>
-            <p className="text-xs text-slate-500">Todos os cards de todos os projetos em um unico Kanban.</p>
+            <p className="text-xs text-slate-500">Selecione um projeto para ver o Kanban.</p>
           </div>
         </div>
 
@@ -308,7 +291,7 @@ export default function ProjectsSection(props: Props) {
 
       {/* Body */}
       <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-0">
-        {/* Left panel: projects list + create */}
+        {/* Left panel: projects list */}
         <div className="border-b lg:border-b-0 lg:border-r border-slate-100 bg-white">
           <div className="p-4 border-b border-slate-100">
             <div className="relative">
@@ -333,41 +316,7 @@ export default function ProjectsSection(props: Props) {
             </div>
           </div>
 
-          <div className="p-4 space-y-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-slate-800">Novo projeto</h3>
-                <span className="text-[11px] text-slate-500">Kanban</span>
-              </div>
-              <input
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="Nome do projeto"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Nome do projeto"
-              />
-              <textarea
-                value={newProjectDesc}
-                onChange={(e) => setNewProjectDesc(e.target.value)}
-                placeholder="Descrio (opcional)"
-                className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                rows={2}
-                aria-label="Descrio do projeto"
-              />
-
-              <div className="flex items-center justify-between gap-2 mt-3"><button
-                  type="button"
-                  onClick={createNewProject}
-                  disabled={!(newProjectName ?? '').trim() || creatingProject}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
-                >
-                  {creatingProject ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                  Criar
-                </button>
-              </div>
-            </div>
-
-            <div>
+          <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-slate-800">Seus projetos</h3>
                 <span className="text-xs text-slate-500">{projects.length}</span>
@@ -449,7 +398,7 @@ export default function ProjectsSection(props: Props) {
                   placeholder="Nova coluna"
                   className="w-44 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   aria-label="Titulo da nova coluna"
-                  disabled={isBusy}
+                  disabled={isBusy || !activeProjectId}
                 />
                 <button
                   type="button"
@@ -476,34 +425,21 @@ export default function ProjectsSection(props: Props) {
             ) : (
               <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-sm font-bold text-slate-800">Novo card</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-bold text-slate-800">Novo card</div>
+                  <div className="text-xs text-slate-500">{activeProject ? activeProject.name : "Selecione um projeto"}</div>
+                </div>
                 <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-                  <select
-                    value={newCardProjectId}
-                    onChange={(e) => setNewCardProjectId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    aria-label="Projeto do card"
-                    disabled={isBusy}
-                  >
-                    <option value="">Projeto</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id} disabled={!p.canEdit}>
-                        {p.name}
-                        {!p.canEdit ? ' (somente leitura)' : ''}
-                      </option>
-                    ))}
-                  </select>
-
                   <select
                     value={newCardColumnId}
                     onChange={(e) => setNewCardColumnId(e.target.value)}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     aria-label="Coluna do card"
-                    disabled={isBusy || !columns.length}
+                    disabled={isBusy || !columns.length || !activeProjectId}
                   >
                     <option value="">Coluna</option>
                     {columns.map((c) => (
-                      <option key={c.id} value={c.id}>{c.id === 'done' ? 'Conclu?dos' : c.title}</option>
+                      <option key={c.id} value={c.id}>{c.id === 'done' ? 'Concluidos' : c.title}</option>
                     ))}
                   </select>
 
@@ -513,7 +449,7 @@ export default function ProjectsSection(props: Props) {
                     placeholder="Titulo do card"
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     aria-label="Titulo do card"
-                    disabled={isBusy}
+                    disabled={isBusy || !activeProjectId}
                   />
 
                   <select
@@ -521,7 +457,7 @@ export default function ProjectsSection(props: Props) {
                     onChange={(e) => setNewCardColor(e.target.value as CardColor)}
                     className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     aria-label="Cor do card"
-                    disabled={isBusy}
+                    disabled={isBusy || !activeProjectId}
                   >
                     <option value="white">Branco</option>
                     <option value="yellow">Amarelo</option>
@@ -534,18 +470,18 @@ export default function ProjectsSection(props: Props) {
                 <textarea
                   value={newCardDesc}
                   onChange={(e) => setNewCardDesc(e.target.value)}
-                  placeholder="Descri??o (opcional)"
+                  placeholder="Descricao (opcional)"
                   className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   rows={2}
-                  aria-label="Descri??o do card"
-                  disabled={isBusy}
+                  aria-label="Descricao do card"
+                  disabled={isBusy || !activeProjectId}
                 />
 
                 <div className="mt-3 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => addKanbanCard(newCardColumnId, newCardProjectId)}
-                    disabled={!newCardProjectId || !newCardColumnId || !(newCardTitle ?? "").trim() || addingCardToColumn === newCardColumnId}
+                    onClick={() => activeProjectId && addKanbanCard(newCardColumnId, activeProjectId)}
+                    disabled={!activeProjectId || !newCardColumnId || !(newCardTitle ?? "").trim() || addingCardToColumn === newCardColumnId}
                     className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98]"
                   >
                     {addingCardToColumn === newCardColumnId ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -567,7 +503,7 @@ export default function ProjectsSection(props: Props) {
                     onDrop={(e) => onDrop(e, col.id)}
                   >
                     <div className="p-4 border-b border-slate-200 bg-[#F4F5F7] rounded-t-2xl flex items-center justify-between sticky top-0">
-                      <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">{col.id === 'done' ? 'Concludos' : col.title}</span>
+                      <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">{col.id === 'done' ? 'Concluidos' : col.title}</span>
                       <span className="text-xs font-bold text-slate-600 bg-slate-200 px-2 py-1 rounded-full">
                         {(cardsByColumn[col.id] || []).length}
                       </span>
@@ -593,7 +529,7 @@ export default function ProjectsSection(props: Props) {
                               }</span>
                             </div>
                             {card.projectName ? (
-                              <div className="mt-1 text-[11px] text-slate-500 truncate">Projeto: {card.projectName}</div>
+                              <div className="mt-1 text-[11px] text-slate-500 truncate">Projeto selecionado: {card.projectName}</div>
                             ) : null}
                             <h4 className="mt-2 text-sm font-semibold text-slate-800 leading-snug line-clamp-2">{card.title}</h4>
                             {card.description ? (

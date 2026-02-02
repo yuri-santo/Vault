@@ -555,7 +555,6 @@ export default function Dashboard({
   const [newCardTitle, setNewCardTitle] = useState('');
   const [addingCardToColumn, setAddingCardToColumn] = useState<string | null>(null);
   const [newCardDesc, setNewCardDesc] = useState('');
-  const [newCardProjectId, setNewCardProjectId] = useState('');
   const [newCardColumnId, setNewCardColumnId] = useState('');
   const [newCardColor, setNewCardColor] = useState<'yellow' | 'blue' | 'green' | 'pink' | 'white'>('yellow');
   const [newCardType, setNewCardType] = useState<'task' | 'note'>('task');
@@ -654,7 +653,6 @@ export default function Dashboard({
       const pList = (projs as any).projects ?? [];
       setProjects(pList);
       if (!activeProjectId && pList.length > 0) setActiveProjectId(pList[0].id);
-      if (!newCardProjectId && pList.length > 0) setNewCardProjectId(pList[0].id);
       await refreshProjectBoards(pList);
     } finally {
       setLoading(false);
@@ -711,36 +709,7 @@ export default function Dashboard({
     () => (activeProjectId ? projects.find((p) => p.id === activeProjectId) || null : null),
     [projects, activeProjectId]
   );
-  const projectBoard = useMemo(() => {
-    const cols: Record<string, KanbanColumn> = {} as any;
-    const order: string[] = [];
-    const addCol = (c: KanbanColumn) => {
-      if (!c || !c.id) return;
-      if (!cols[c.id]) {
-        cols[c.id] = { id: c.id, title: c.title } as any;
-        order.push(c.id);
-      }
-    };
-
-    DEFAULT_PROJECT_BOARD.columns.forEach(addCol);
-    Object.values(projectBoards).forEach((b) => b.columns.forEach(addCol));
-
-    const columns = order.map((id) => cols[id]).filter(Boolean) as any[];
-    const cards: any[] = [];
-    for (const p of projects) {
-      const b = projectBoards[p.id];
-      if (!b) continue;
-      for (const c of b.cards || []) {
-        cards.push({
-          ...c,
-          projectId: p.id,
-          projectName: p.name,
-          canEdit: p.canEdit,
-        });
-      }
-    }
-    return { columns, cards } as ProjectBoard;
-  }, [projectBoards, projects]);
+  const projectBoard = useMemo(() => (activeProjectId ? projectBoards[activeProjectId] || null : null), [activeProjectId, projectBoards]);
 
   const activeProjectBoard = useMemo(
     () => (activeCardProjectId ? projectBoards[activeCardProjectId] || null : null),
@@ -1027,7 +996,6 @@ export default function Dashboard({
       const newest = pList[0] || null;
       if (newest) {
         setActiveProjectId(newest.id);
-        setNewCardProjectId(newest.id);
       }
       await refreshProjectBoards(pList);
     } catch (err: any) {
@@ -1047,7 +1015,6 @@ export default function Dashboard({
       if (activeProjectId === id) {
         setActiveProjectId(ps[0]?.id || null);
       }
-      if (newCardProjectId === id) setNewCardProjectId(ps[0]?.id || '');
       await refreshProjectBoards(ps);
     } catch {
       push('Falha ao excluir projeto', 'error');
@@ -1680,8 +1647,6 @@ export default function Dashboard({
                 setNewCardDesc={setNewCardDesc}
                 newCardColor={newCardColor}
                 setNewCardColor={setNewCardColor}
-                newCardProjectId={newCardProjectId}
-                setNewCardProjectId={setNewCardProjectId}
                 newCardColumnId={newCardColumnId}
                 setNewCardColumnId={setNewCardColumnId}
                 addKanbanCard={addKanbanCard}
