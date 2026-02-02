@@ -38,6 +38,7 @@ import {
   type VaultEntry,
   type NoteItem,
 } from '../lib/api';
+import { copyText } from '../lib/clipboard';
 import { Modal } from '../components/modal';
 import { useToast } from '../components/toast';
 import { Icon } from './dashboard/Icons';
@@ -92,15 +93,6 @@ function StatCard({
 }) {
   return (
     <div className="rounded-2xl border border-zinc-200/70 bg-white/80 backdrop-blur shadow-sm p-4 sm:p-5">
-
-      {(projectsLoading || projectBoardLoading || creatingProject) && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
-          <div className="rounded-2xl bg-white/10 px-6 py-4 backdrop-blur">
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            <div className="mt-3 text-center text-sm text-white/80">Carregando…</div>
-          </div>
-        </div>
-      )}
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs text-zinc-500">{label}</div>
@@ -165,33 +157,14 @@ function EntryActions({
   const boxRef = useRef<HTMLDivElement>(null);
   useOutsideClick(boxRef, () => setOpen(false));
   const { push } = useToast();
-      push('Copiado ✅', 'success');
+  const doCopy = useCallback(async (text: string, label: string) => {
+    try {
+      await copyText(text ?? '');
+      push(`${label} copiado ✅`, 'success');
     } catch {
       push('Não foi possível copiar', 'error');
     }
   }, [push]);
-
-  async function deleteNote(id: string) {
-    if (!confirm('Excluir esta nota?')) return;
-    try {
-      const res = await deleteNoteItem(id);
-      if (res.ok) {
-        setNoteItems((prev) => prev.filter((n) => n.id !== id));
-        push('Nota excluída', 'success');
-      } else {
-        push('Erro ao excluir nota', 'error');
-      }
-    } catch {
-      push('Erro ao excluir nota', 'error');
-    }
-  }
-
-
-  async function copy(text: string, label: string) {
-    await navigator.clipboard.writeText(text);
-    push(`${label} copiado ✅`, 'success');
-  }
-
   return (
     <div className="relative" ref={boxRef}>
       <button
@@ -220,7 +193,7 @@ function EntryActions({
             disabled={!entry.username}
             onClick={async () => {
               if (!entry.username) return;
-              await copy(entry.username, 'Usuário');
+              await doCopy(entry.username, 'Usuário');
               setOpen(false);
             }}
           />
@@ -230,7 +203,7 @@ function EntryActions({
             disabled={!entry.email}
             onClick={async () => {
               if (!entry.email) return;
-              await copy(entry.email, 'E-mail');
+              await doCopy(entry.email, 'E-mail');
               setOpen(false);
             }}
           />
@@ -240,7 +213,7 @@ function EntryActions({
             disabled={!entry.password}
             onClick={async () => {
               if (!entry.password) return;
-              await copy(entry.password, 'Senha');
+              await doCopy(entry.password, 'Senha');
               setOpen(false);
             }}
           />
@@ -408,6 +381,15 @@ export default function Dashboard({
   onLogout: () => void;
 }) {
   const { push } = useToast();
+  const copyToClipboard = useCallback(async (text: string, label?: string) => {
+    try {
+      await copyText(text ?? '');
+      push(label ? `${label} copiado ✅` : 'Copiado ✅', 'success');
+    } catch {
+      push('Não foi possível copiar', 'error');
+    }
+  }, [push]);
+
 
   const [section, setSection] = useState<Section>('vault');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
