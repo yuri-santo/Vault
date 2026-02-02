@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Skeleton, Textarea, cn } from '../components/ui';
 import {
   acceptInvite,
@@ -165,6 +165,15 @@ function EntryActions({
   const boxRef = useRef<HTMLDivElement>(null);
   useOutsideClick(boxRef, () => setOpen(false));
   const { push } = useToast();
+
+  const copyText = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(String(text ?? ''));
+      push('Copiado ✅', 'success');
+    } catch {
+      push('Não foi possível copiar', 'error');
+    }
+  }, [push]);
 
   async function copyText(text: string) {
     try {
