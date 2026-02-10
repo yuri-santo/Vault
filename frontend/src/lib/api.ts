@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const envBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
 const baseURL =
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
+  envBase ||
+  (typeof window !== 'undefined' ? window.location.origin : '');
 
 let csrfToken: string | null = null;
 

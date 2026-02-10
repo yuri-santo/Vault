@@ -22,13 +22,18 @@ const schema = z.object({
   // Upload/remoção via API ainda exigem OAuth/Service Account.
   GOOGLE_DRIVE_API_KEY: z.string().optional(),
 
-  COOKIE_SECURE: z.coerce.boolean().optional().default(false),
+  // If undefined, we'll default based on NODE_ENV in index.ts.
+  COOKIE_SECURE: z.coerce.boolean().optional(),
 
   SESSION_TTL_MS: z.coerce.number().int().positive().optional().default(1000 * 60 * 60 * 12), // 12h
 
   // (Opcional) tokens para leitura/escrita de logs de cliente
   LOG_WRITE_TOKEN: z.string().optional(),
   LOG_READ_TOKEN: z.string().optional(),
+
+  // (Opcional) servir frontend estÃ¡tico pelo backend (mesma porta)
+  SERVE_FRONTEND: z.coerce.boolean().optional(),
+  FRONTEND_DIST_DIR: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

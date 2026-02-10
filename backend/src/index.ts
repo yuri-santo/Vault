@@ -8,6 +8,8 @@ import csurf from 'csurf';
 import admin from 'firebase-admin';
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
+import path from 'path';
+import fs from 'fs';
 
 import { loadEnv } from './utils/env';
 import { authRouter } from './routes/auth';
@@ -22,7 +24,11 @@ const env = loadEnv();
 const app = express();
 
 const isProd = env.NODE_ENV === 'production';
-const cookieSecure = isProd || env.COOKIE_SECURE;
+const cookieSecure = env.COOKIE_SECURE ?? isProd;
+const serveFrontend = Boolean(env.SERVE_FRONTEND);
+const frontendDistDir = env.FRONTEND_DIST_DIR
+  ? path.resolve(env.FRONTEND_DIST_DIR)
+  : path.resolve(process.cwd(), '../frontend/dist');
 
 // ✅ Render fica atrás de proxy (necessário para cookie Secure funcionar direito)
 if (isProd) app.set('trust proxy', 1);
@@ -43,7 +49,35 @@ const logger = winston.createLogger({
   ]
 });
 
-app.use(helmet());
+app.use(helmet({
+  // Allow OAuth popups to keep window.opener (needed by Firebase Google login)
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  // Avoid COEP issues with third-party auth scripts
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", 'https://apis.google.com', 'https://www.gstatic.com'],
+      scriptSrcAttr: ["'none'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https://www.gstatic.com', 'https://lh3.googleusercontent.com'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: [
+        "'self'",
+        'https://identitytoolkit.googleapis.com',
+        'https://securetoken.googleapis.com',
+        'https://www.googleapis.com',
+        'https://apis.google.com',
+        'https://firebaseinstallations.googleapis.com',
+        'https://www.gstatic.com'
+      ],
+      frameSrc: ["'self'", 'https://accounts.google.com', 'https://*.firebaseapp.com', 'https://*.firebaseauth.com'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  },
+}));
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 
@@ -109,7 +143,9 @@ function csrfIfCookie(mw: express.RequestHandler): express.RequestHandler {
 }
 
 // Health / root
-app.get('/', (_req, res) => res.status(200).send('OK'));
+if (!serveFrontend) {
+  app.get('/', (_req, res) => res.status(200).send('OK'));
+}
 app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
 
 // Endpoint para obter token CSRF
@@ -180,6 +216,21 @@ app.use('/logs', logsRouter({
   readToken: env.LOG_READ_TOKEN,
   writeToken: env.LOG_WRITE_TOKEN,
 }));
+
+// Opcional: servir frontend estÃ¡tico pelo backend (mesma porta)
+if (serveFrontend) {
+  const indexPath = path.join(frontendDistDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    app.use(express.static(frontendDistDir));
+    app.get('*', (req, res, next) => {
+      if (req.method !== 'GET') return next();
+      if (!req.accepts('html')) return next();
+      return res.sendFile(indexPath);
+    });
+  } else {
+    logger.warn({ type: 'frontend_missing', dir: frontendDistDir });
+  }
+}
 
 // Error handler (captura erros do servidor)
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
